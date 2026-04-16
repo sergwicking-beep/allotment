@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './store/AppContext';
 import Layout from './components/Layout';
 
@@ -21,7 +21,7 @@ function PageFallback() {
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Layout>
           <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -37,7 +37,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </Layout>
-      </BrowserRouter>
+      </HashRouter>
     </AppProvider>
   );
 }
