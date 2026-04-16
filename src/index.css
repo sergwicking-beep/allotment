@@ -854,3 +854,103 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .color-swatch:hover    { transform: scale(1.2); }
 .color-swatch.selected { border-color: var(--gray-800); transform: scale(1.15); }
+
+/* ── Calendar page ────────────────────────────────────────────────────────── */
+
+.cal-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+/* Crop hint bar inside modal */
+.crop-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+}
+
+/* Assignment table */
+.assignment-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.assignment-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--gray-500);
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+  background: var(--gray-50);
+}
+.assignment-table td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+  vertical-align: middle;
+}
+.assignment-row:last-child td { border-bottom: none; }
+.assignment-row:hover td { background: var(--gray-50); }
+
+/* Year calendar strip */
+.cal-strip-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 600px;
+  width: 100%;
+}
+.cal-strip-table th, .cal-strip-table td { border: none; }
+.cal-strip-label {
+  text-align: left;
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  white-space: nowrap;
+  min-width: 120px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  vertical-align: middle;
+}
+.cal-strip-month {
+  text-align: center;
+  padding: 0.25rem 0.15rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  width: 7%;
+}
+.cal-strip-cell {
+  text-align: center;
+  padding: 3px 1px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 3px;
+  height: 22px;
+}
+.cal-strip-table tbody tr:nth-child(even) .cal-strip-cell { filter: brightness(0.97); }
+
+/* Star rating */
+.star-row { display: flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; }
+.star-btn {
+  font-size: 1.5rem;
+  color: var(--gray-300);
+  transition: color var(--transition);
+  padding: 0;
+  line-height: 1;
+}
+.star-btn.active { color: #f59e0b; }
+.star-btn:hover  { color: #f59e0b; }
