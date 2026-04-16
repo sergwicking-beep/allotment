@@ -169,6 +169,7 @@ export default function CropBrowser() {
   const [familyF, setFamilyF]     = useState('');
   const [monthF, setMonthF]       = useState('');
   const [propF, setPropF]         = useState('');
+  const [flowerF, setFlowerF]     = useState(false);
 
   const families = getAllFamilies();
   const currentMonth = new Date().getMonth() + 1;
@@ -178,11 +179,12 @@ export default function CropBrowser() {
     if (familyF && crop.family !== familyF) return false;
     if (monthF && !isSowableInMonth(crop, parseInt(monthF))) return false;
     if (propF && crop.propagation !== propF) return false;
+    if (flowerF && !crop.flower) return false;
     return true;
-  }), [search, familyF, monthF, propF]);
+  }), [search, familyF, monthF, propF, flowerF]);
 
-  const hasFilters = search || familyF || monthF || propF;
-  const clear = () => { setSearch(''); setFamilyF(''); setMonthF(''); setPropF(''); };
+  const hasFilters = search || familyF || monthF || propF || flowerF;
+  const clear = () => { setSearch(''); setFamilyF(''); setMonthF(''); setPropF(''); setFlowerF(false); };
 
   return (
     <div>
@@ -229,6 +231,13 @@ export default function CropBrowser() {
             onClick={() => monthF === String(currentMonth) ? setMonthF('') : setMonthF(String(currentMonth))}
           >
             🌱 Sow this month ({MONTH_NAMES[currentMonth - 1]})
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={flowerF ? { background: '#fdf2f8', borderColor: '#f9a8d4', color: '#be185d' } : {}}
+            onClick={() => setFlowerF(f => !f)}
+          >
+            🌸 Flowers only
           </button>
           {hasFilters && (
             <button className="btn btn-ghost btn-sm" onClick={clear}>✕ Clear filters</button>
