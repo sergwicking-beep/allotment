@@ -755,3 +755,102 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   flex-shrink: 0;
 }
 .getting-started-text { flex: 1; }
+
+/* ── Plot Layout ──────────────────────────────────────────────────────────── */
+
+.view-toggle { display: flex; gap: 0; border-radius: var(--radius-sm); overflow: hidden; }
+.view-toggle .btn { border-radius: 0; }
+.view-toggle .btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.view-toggle .btn:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
+/* Grid canvas */
+.plot-grid-scroll { overflow: auto; }
+.plot-grid {
+  display: grid;
+  position: relative;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  gap: 1px;
+}
+.plot-cell {
+  border: 1px dashed var(--gray-200);
+  border-radius: 2px;
+  background: var(--white);
+}
+.plot-bed {
+  position: relative;
+  z-index: 2;
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  border: 2px solid rgba(0,0,0,.12);
+  transition: filter var(--transition), transform var(--transition);
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.plot-bed:hover { filter: brightness(1.08); transform: scale(1.02); z-index: 3; }
+.plot-bed.inactive { border-style: dashed; }
+.plot-bed-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(0,0,0,.75);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+.plot-bed-dims {
+  font-size: 0.62rem;
+  color: rgba(0,0,0,.55);
+  white-space: nowrap;
+}
+
+/* Bed cards grid */
+.bed-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+.bed-card {
+  display: flex;
+  overflow: hidden;
+}
+.bed-card-stripe {
+  width: 5px;
+  flex-shrink: 0;
+}
+.bed-card-content {
+  flex: 1;
+  padding: 0.75rem 1rem;
+}
+.bed-card-crops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+/* Colour swatches in modal */
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform var(--transition), border-color var(--transition);
+}
+.color-swatch:hover    { transform: scale(1.2); }
+.color-swatch.selected { border-color: var(--gray-800); transform: scale(1.15); }
