@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useApp, useBeds, useAssignments } from '../store/AppContext';
+import { useApp, useBeds, useAssignments, useHistory } from '../store/AppContext';
 import {
   CROPS, getCropById, getFamilyColor, getFamilyBgColor,
   isSowableInMonth, MONTHS,
 } from '../data/crops';
+
+const ROTATION_GAP = { Brassica: 3, Potato: 3, Allium: 3, Root: 2, Legume: 2, Cucurbit: 2 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ function daysBetween(a, b) {
 
 // ── Add/Edit Assignment Modal ─────────────────────────────────────────────────
 
-function AssignmentModal({ assignment, onSave, onClose, beds }) {
+function AssignmentModal({ assignment, onSave, onClose, beds, history }) {
   const isNew = !assignment;
   const [form, setForm] = useState(() => isNew ? {
     bedId: beds[0]?.id || '',
@@ -134,6 +136,38 @@ function AssignmentModal({ assignment, onSave, onClose, beds }) {
                 </span>
               </div>
             )}
+
+            {/* Rotation warning */}
+            {(() => {
+              if (!form.bedId || !selectedCrop || selectedCrop.perennial) return null;
+              const rg = selectedCrop.rotationGroup;
+              const gap = ROTATION_GAP[rg];
+              if (!gap) return null;
+              const currentYear = CURRENT_YEAR;
+              for (let y = currentYear - 1; y >= currentYear - gap; y--) {
+                const clash = history.find(h =>
+                  h.bedId === form.bedId &&
+                  h.year === y &&
+                  getCropById(h.cropId)?.rotationGroup === rg
+                );
+                if (clash) {
+                  const bed = beds.find(b => b.id === form.bedId);
+                  return (
+                    <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+                      <span className="alert-icon">⚠️</span>
+                      <div className="alert-body">
+                        <div className="alert-title">Rotation warning</div>
+                        <div className="alert-text">
+                          {clash.cropName} ({rg} family) was in {bed?.name || 'this bed'} in {y}.
+                          Recommended gap: {gap} years to reduce soil-borne disease risk.
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
 
             <div className="form-row form-row-2">
               <div className="form-group">
@@ -402,6 +436,7 @@ export default function Calendar() {
   const { dispatch } = useApp();
   const beds        = useBeds();
   const assignments = useAssignments();
+  const history     = useHistory();
 
   const [modal,  setModal]  = useState(null); // null | { type, assignment? }
   const [filter, setFilter] = useState({ status: 'active', bedId: '', search: '' });
@@ -561,14 +596,16 @@ export default function Calendar() {
         <AssignmentModal
           onSave={handleSave}
           onClose={() => setModal(null)}
-          beds={activeBeds} />
+          beds={activeBeds}
+          history={history} />
       )}
       {modal?.type === 'edit' && (
         <AssignmentModal
           assignment={modal.assignment}
           onSave={handleSave}
           onClose={() => setModal(null)}
-          beds={activeBeds} />
+          beds={activeBeds}
+          history={history} />
       )}
       {modal?.type === 'harvest' && (
         <HarvestModal
