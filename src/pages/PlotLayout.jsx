@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp, useBeds, useActiveAssignments, useHistory } from '../store/AppContext';
 import { CROPS, getCropById, getFamilyColor, getFamilyBgColor, MONTHS } from '../data/crops';
 
@@ -400,9 +401,12 @@ function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onEditAssignme
                   }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                        <Link
+                          to={`/crops/${a.cropId}`}
+                          style={{ fontWeight: 600, fontSize: '0.875rem', color: 'inherit', textDecoration: 'underline', textDecorationColor: col + '66', textUnderlineOffset: '2px' }}
+                        >
                           {crop?.name || a.cropId}
-                        </span>
+                        </Link>
                         {a.variety && (
                           <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{a.variety}</span>
                         )}
