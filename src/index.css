@@ -954,3 +954,128 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .star-btn.active { color: #f59e0b; }
 .star-btn:hover  { color: #f59e0b; }
+
+/* ── Rotation ─────────────────────────────────────────────────────────────── */
+
+.rotation-table { width: 100%; border-collapse: collapse; }
+.rotation-table th {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--gray-500);
+  padding: 0.6rem 0.75rem;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+.rot-year-col { text-align: center; min-width: 110px; }
+.rot-year-col.current { color: var(--green-700); }
+.rot-bed-col { text-align: left; min-width: 120px; }
+.rot-row td { border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+.rot-row:last-child td { border-bottom: none; }
+.rot-row:hover td { background: var(--gray-50); }
+.rot-bed-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rot-bed-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rot-cell { padding: 0.5rem 0.75rem; }
+.rot-cell.empty { text-align: center; }
+.rot-crops { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.rot-chip {
+  display: inline-flex; align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── Cold Frame ───────────────────────────────────────────────────────────── */
+
+.cf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+.cf-card { overflow: visible; }
+.cf-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem 0.75rem 1.1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+.cf-card-body { padding: 0.75rem 1rem; }
+.cf-card-footer {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--gray-100);
+  background: var(--gray-50);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+/* Stage progress */
+.cf-progress {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
+  position: relative;
+}
+.cf-progress::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: var(--gray-200);
+  z-index: 0;
+}
+.cf-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.cf-progress-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  flex-shrink: 0;
+}
+.cf-progress-step.done .cf-progress-dot  { background: var(--green-600); }
+.cf-progress-step.future .cf-progress-dot { background: var(--gray-200); }
+.cf-progress-label {
+  font-size: 0.6rem;
+  color: var(--gray-400);
+  text-align: center;
+  white-space: nowrap;
+}
+.cf-progress-step.current .cf-progress-label { color: var(--gray-800); font-weight: 600; }
+.cf-progress-step.done    .cf-progress-label { color: var(--green-700); }
+
+.cf-timeline { margin: 0.35rem 0; }
+.cf-care-hint {
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--gray-50);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--green-400);
+}
