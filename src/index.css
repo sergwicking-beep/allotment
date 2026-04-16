@@ -797,6 +797,25 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .plot-bed:hover { filter: brightness(1.08); transform: scale(1.02); z-index: 3; }
 .plot-bed.inactive { border-style: dashed; }
+.plot-bed.is-dragging {
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  z-index: 10;
+  opacity: 0.9 !important;
+  transform: none !important;
+}
+.plot-resize-handle {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  border-right: 2px solid rgba(0,0,0,.3);
+  border-bottom: 2px solid rgba(0,0,0,.3);
+  border-radius: 0 0 3px 0;
+  flex-shrink: 0;
+}
+.plot-resize-handle:hover { border-color: rgba(0,0,0,.6); }
 .plot-bed-name {
   font-size: 0.72rem;
   font-weight: 700;
