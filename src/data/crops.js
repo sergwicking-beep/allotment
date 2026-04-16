@@ -31,6 +31,16 @@ export function getCropById(id) { return CROPS.find(c => c.id === id); }
 export function getCropsByFamily(family) { return CROPS.filter(c => c.family === family); }
 export function getAllFamilies() { return [...new Set(CROPS.map(c => c.family))].sort(); }
 
+// Returns the approximate outdoor transplant window for a crop started indoors.
+// Adds cold-frame weeks to the indoor sow window to get the planting-out range.
+export function getTransplantWindow(crop) {
+  if (!crop.weeksInColdFrame || !crop.sowWindowStart || !crop.sowWindowEnd) return null;
+  const monthsToAdd = Math.round(crop.weeksInColdFrame / 4.33);
+  const start = ((crop.sowWindowStart - 1 + monthsToAdd) % 12) + 1;
+  const end   = ((crop.sowWindowEnd   - 1 + monthsToAdd) % 12) + 1;
+  return { start, end };
+}
+
 export function isSowableInMonth(crop, month) {
   if (crop.perennial) return false;
   const m = month;
