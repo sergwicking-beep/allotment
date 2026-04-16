@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import AiAdvice from './AiAdvice';
 
 const NAV_ITEMS = [
   { to: '/',           label: 'Dashboard',    icon: '🌱', end: true  },
@@ -63,6 +64,9 @@ export default function Layout({ children }) {
 
       {/* Main content */}
       <main className="app-main">{children}</main>
+
+      {/* Global AI advice button (floating) */}
+      <AiAdvice />
 
       {/* Mobile bottom nav */}
       <nav className="bottom-nav">
