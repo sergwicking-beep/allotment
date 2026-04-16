@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getCropById, getFamilyColor, getFamilyBgColor,
-  MONTHS, MONTH_NAMES, isSowableInMonth,
+  MONTHS, MONTH_NAMES, isSowableInMonth, getTransplantWindow,
 } from '../data/crops';
 import { useApp } from '../store/AppContext';
 
@@ -86,7 +86,8 @@ export default function CropDetail() {
   const harvestedWithNotes = state.assignments.filter(a => a.cropId === crop.id && a.status === 'harvested' && a.yieldRating);
   const seeds = state.seedStock.filter(s => s.cropId === crop.id);
 
-  const propLabel = { direct: 'Direct sow only', cold_frame: 'Under cover / cold frame', both: 'Direct sow or under cover' };
+  const propLabel = { direct: 'Direct sow only', cold_frame: 'Start indoors / cold frame', both: 'Direct sow or start indoors' };
+  const sowsIndoors = crop.propagation === 'cold_frame' || (crop.propagation === 'both' && crop.weeksInColdFrame);
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto' }}>
@@ -112,7 +113,9 @@ export default function CropDetail() {
                 <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 9999, fontSize: '0.75rem', fontWeight: 600, padding: '4px 12px' }}>Bush crop</span>
               )}
               {!crop.perennial && nowSowable && (
-                <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: 9999, fontSize: '0.75rem', fontWeight: 600, padding: '4px 12px' }}>✅ Sow now</span>
+                <span style={{ background: sowsIndoors ? '#ecfeff' : '#d1fae5', color: sowsIndoors ? '#0e7490' : '#065f46', borderRadius: 9999, fontSize: '0.75rem', fontWeight: 600, padding: '4px 12px' }}>
+                  {sowsIndoors ? '🏡 Sow indoors now' : '🌱 Sow outdoors now'}
+                </span>
               )}
             </div>
           </div>
@@ -148,33 +151,78 @@ export default function CropDetail() {
       )}
 
       {/* ── Calendar ─────────────────────────────────── */}
-      {!crop.perennial && (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div className="card-header"><span className="card-title">📅 Growing calendar</span></div>
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Sow window
+      {!crop.perennial && (() => {
+        const transplant = getTransplantWindow(crop);
+        const sowsIndoors = crop.propagation === 'cold_frame' || (crop.propagation === 'both' && crop.weeksInColdFrame);
+        const sowsDirect  = crop.propagation === 'direct'     || crop.propagation === 'both';
+
+        const INDOOR_COLOR     = '#0891b2';
+        const TRANSPLANT_COLOR = '#059669';
+        const HARVEST_COLOR    = '#d97706';
+
+        const rows = [];
+        if (sowsIndoors && crop.sowWindowStart) {
+          rows.push({ label: '🏡 Sow indoors / cold frame', start: crop.sowWindowStart, end: crop.sowWindowEnd, color: INDOOR_COLOR });
+        }
+        if (transplant) {
+          rows.push({ label: '🌿 Plant out / transplant', start: transplant.start, end: transplant.end, color: TRANSPLANT_COLOR });
+        }
+        if (sowsDirect && crop.sowWindowStart) {
+          rows.push({
+            label: '🌱 Sow outdoors (direct)',
+            start: crop.sowWindowStart, end: crop.sowWindowEnd,
+            altStart: crop.alternateSowStart, altEnd: crop.alternateSowEnd,
+            color,
+          });
+        }
+        if (crop.harvestWindowStart) {
+          rows.push({ label: 'Harvest', start: crop.harvestWindowStart, end: crop.harvestWindowEnd, color: HARVEST_COLOR });
+        }
+
+        return (
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <div className="card-header"><span className="card-title">📅 Growing calendar</span></div>
+            <div className="card-body">
+              {/* Legend */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                {sowsIndoors && <span style={{ fontSize: '0.72rem', background: '#ecfeff', color: '#0e7490', borderRadius: 9999, padding: '2px 10px', fontWeight: 600 }}>🏡 Indoors = cold frame / propagator</span>}
+                {transplant  && <span style={{ fontSize: '0.72rem', background: '#d1fae5', color: '#065f46', borderRadius: 9999, padding: '2px 10px', fontWeight: 600 }}>🌿 Plant out = transplant to bed</span>}
+                {sowsDirect  && <span style={{ fontSize: '0.72rem', background: getFamilyBgColor(crop.family), color, borderRadius: 9999, padding: '2px 10px', fontWeight: 600 }}>🌱 Direct = sow where it grows</span>}
               </div>
-              <MonthBar start={crop.sowWindowStart} end={crop.sowWindowEnd} altStart={crop.alternateSowStart} altEnd={crop.alternateSowEnd} color={color} />
+
+              {/* Rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {rows.map((row, i) => (
+                  <div key={i}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: row.color, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
+                      {row.label}
+                    </div>
+                    <MonthBar start={row.start} end={row.end} altStart={row.altStart} altEnd={row.altEnd} color={row.color} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Shared month labels at bottom */}
               <MonthLabels />
+
+              {/* Alternate sow note */}
               {crop.alternateSowStart && (
-                <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>
-                  Primary: {MONTH_NAMES[crop.sowWindowStart - 1]}–{MONTH_NAMES[crop.sowWindowEnd - 1]}
-                  {' · '}Alternate sowing: {MONTH_NAMES[crop.alternateSowStart - 1]}–{MONTH_NAMES[crop.alternateSowEnd - 1]}
+                <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '0.5rem' }}>
+                  Alternate sowing window: {MONTH_NAMES[crop.alternateSowStart - 1]}–{MONTH_NAMES[crop.alternateSowEnd - 1]}
+                  {' (shown lighter on direct sow bar)'}
+                </p>
+              )}
+
+              {/* Transplant note */}
+              {transplant && crop.weeksInColdFrame && (
+                <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '0.3rem' }}>
+                  Plant out window estimated from {crop.weeksInColdFrame} weeks in cold frame after indoor sowing.
                 </p>
               )}
             </div>
-            <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Harvest window
-              </div>
-              <MonthBar start={crop.harvestWindowStart} end={crop.harvestWindowEnd} color="#d97706" />
-              <MonthLabels />
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Propagation ──────────────────────────────── */}
       {crop.propagationNotes && (

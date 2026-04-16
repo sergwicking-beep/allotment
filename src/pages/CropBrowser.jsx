@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CROPS, MONTHS, MONTH_NAMES,
-  getAllFamilies, getFamilyColor, getFamilyBgColor, isSowableInMonth,
+  getAllFamilies, getFamilyColor, getFamilyBgColor, isSowableInMonth, getTransplantWindow,
 } from '../data/crops';
 
 function MonthBar({ start, end, altStart, altEnd, color }) {
@@ -39,11 +39,27 @@ function PropBadge({ method }) {
   );
 }
 
+const INDOOR_COLOR   = '#0891b2'; // teal for indoor/cold-frame sowing
+const TRANSPLANT_COLOR = '#059669'; // green for planting out
+
 function CropCard({ crop }) {
   const navigate = useNavigate();
   const color = getFamilyColor(crop.family);
-  const bg = getFamilyBgColor(crop.family);
-  const nowSowable = isSowableInMonth(crop, new Date().getMonth() + 1);
+  const bg    = getFamilyBgColor(crop.family);
+  const currentMonth = new Date().getMonth() + 1;
+  const nowSowable   = isSowableInMonth(crop, currentMonth);
+  const transplant   = getTransplantWindow(crop);
+
+  // Is this crop sowable indoors this month?
+  const sowsIndoors = crop.propagation === 'cold_frame' || (crop.propagation === 'both' && crop.weeksInColdFrame);
+  // Is the transplant window now?
+  const transplantNow = transplant && (
+    transplant.start <= transplant.end
+      ? currentMonth >= transplant.start && currentMonth <= transplant.end
+      : currentMonth >= transplant.start || currentMonth <= transplant.end
+  );
+
+  const labelW = 56; // px label column width
 
   return (
     <div
@@ -66,11 +82,18 @@ function CropCard({ crop }) {
       {/* Name row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
         <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#111827' }}>{crop.name}</span>
-        {nowSowable && !crop.perennial && (
-          <span style={{ fontSize: '0.65rem', background: '#d1fae5', color: '#065f46', borderRadius: 9999, padding: '2px 7px', whiteSpace: 'nowrap', fontWeight: 600 }}>
-            Sow now ✓
-          </span>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', flexShrink: 0 }}>
+          {nowSowable && !crop.perennial && (
+            <span style={{ fontSize: '0.63rem', background: sowsIndoors ? '#ecfeff' : '#d1fae5', color: sowsIndoors ? '#0e7490' : '#065f46', borderRadius: 9999, padding: '2px 7px', whiteSpace: 'nowrap', fontWeight: 600 }}>
+              {sowsIndoors ? '🏡 Sow indoors ✓' : '🌱 Sow outdoors ✓'}
+            </span>
+          )}
+          {transplantNow && (
+            <span style={{ fontSize: '0.63rem', background: '#d1fae5', color: '#065f46', borderRadius: 9999, padding: '2px 7px', whiteSpace: 'nowrap', fontWeight: 600 }}>
+              🌿 Plant out now ✓
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Family */}
@@ -80,17 +103,47 @@ function CropCard({ crop }) {
 
       {/* Perennial notice OR month bars */}
       {crop.perennial ? (
-        <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>🌿 Perennial — year-round</p>
+        <p style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>🌿 Perennial — year-round bed occupant</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: '#6b7280' }}>
-            <span style={{ width: 42, flexShrink: 0 }}>Sow</span>
-            <div style={{ flex: 1 }}>
-              <MonthBar start={crop.sowWindowStart} end={crop.sowWindowEnd} altStart={crop.alternateSowStart} altEnd={crop.alternateSowEnd} color={color} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+
+          {/* Sow indoors row (cold_frame or both crops) */}
+          {sowsIndoors && crop.sowWindowStart && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', color: '#6b7280' }}>
+              <span style={{ width: labelW, flexShrink: 0, color: INDOOR_COLOR, fontWeight: 600 }}>🏡 Indoors</span>
+              <div style={{ flex: 1 }}>
+                <MonthBar start={crop.sowWindowStart} end={crop.sowWindowEnd} color={INDOOR_COLOR} />
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', color: '#6b7280' }}>
-            <span style={{ width: 42, flexShrink: 0 }}>Harvest</span>
+          )}
+
+          {/* Transplant row */}
+          {transplant && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', color: '#6b7280' }}>
+              <span style={{ width: labelW, flexShrink: 0, color: TRANSPLANT_COLOR, fontWeight: 600 }}>🌿 Plant out</span>
+              <div style={{ flex: 1 }}>
+                <MonthBar start={transplant.start} end={transplant.end} color={TRANSPLANT_COLOR} />
+              </div>
+            </div>
+          )}
+
+          {/* Direct sow outdoors row */}
+          {(crop.propagation === 'direct' || crop.propagation === 'both') && crop.sowWindowStart && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', color: '#6b7280' }}>
+              <span style={{ width: labelW, flexShrink: 0, color: color, fontWeight: 600 }}>🌱 Direct</span>
+              <div style={{ flex: 1 }}>
+                <MonthBar
+                  start={crop.sowWindowStart} end={crop.sowWindowEnd}
+                  altStart={crop.alternateSowStart} altEnd={crop.alternateSowEnd}
+                  color={color}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Harvest row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.68rem', color: '#6b7280' }}>
+            <span style={{ width: labelW, flexShrink: 0 }}>Harvest</span>
             <div style={{ flex: 1 }}>
               <MonthBar start={crop.harvestWindowStart} end={crop.harvestWindowEnd} color="#d97706" />
             </div>
