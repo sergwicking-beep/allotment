@@ -10,9 +10,9 @@ const BED_COLORS = [
 ];
 function pickColor(idx) { return BED_COLORS[idx % BED_COLORS.length]; }
 
-const GRID_COLS = 12;
-const GRID_ROWS = 10;
-const CELL_PX   = 112; // doubled from 56
+const GRID_COLS = 24;
+const GRID_ROWS = 20;
+const CELL_PX   = 56;
 
 const ROTATION_GAP = { Brassica: 3, Potato: 3, Allium: 3, Root: 2, Legume: 2, Cucurbit: 2 };
 const TODAY = new Date().toISOString().split('T')[0];
