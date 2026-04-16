@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useApp, useBeds, useActiveAssignments } from '../store/AppContext';
-import { getCropById, getFamilyColor } from '../data/crops';
+import { useApp, useBeds, useActiveAssignments, useHistory } from '../store/AppContext';
+import { CROPS, getCropById, getFamilyColor, getFamilyBgColor, MONTHS } from '../data/crops';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const BED_COLORS = [
@@ -12,9 +12,20 @@ function pickColor(idx) { return BED_COLORS[idx % BED_COLORS.length]; }
 
 const GRID_COLS = 12;
 const GRID_ROWS = 10;
-const CELL_PX   = 56; // visual size of each grid cell in px
+const CELL_PX   = 112; // doubled from 56
+
+const ROTATION_GAP = { Brassica: 3, Potato: 3, Allium: 3, Root: 2, Legume: 2, Cucurbit: 2 };
+const TODAY = new Date().toISOString().split('T')[0];
+const CURRENT_YEAR = new Date().getFullYear();
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+function addWeeks(dateStr, n) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + n * 7);
+  return d.toISOString().split('T')[0];
+}
 
 // Spread new beds across the grid instead of stacking at (1,1)
 function defaultBedData(count) {
@@ -152,16 +163,297 @@ function DeleteModal({ bed, onConfirm, onClose }) {
   );
 }
 
+// ── AssignmentModal ───────────────────────────────────────────────────────────
+function AssignmentModal({ assignment, bedId, beds, history, onSave, onClose }) {
+  const isNew = !assignment;
+  const [form, setForm] = useState(() => isNew ? {
+    bedId: bedId || beds[0]?.id || '',
+    cropId: CROPS[0].id,
+    variety: '',
+    sowDate: TODAY,
+    transplantDate: '',
+    expectedHarvestDate: '',
+    status: 'sown',
+    successionIntervalWeeks: '',
+    season: CURRENT_YEAR,
+  } : {
+    bedId: assignment.bedId,
+    cropId: assignment.cropId,
+    variety: assignment.variety || '',
+    sowDate: assignment.sowDate || TODAY,
+    transplantDate: assignment.transplantDate || '',
+    expectedHarvestDate: assignment.expectedHarvestDate || '',
+    status: assignment.status,
+    successionIntervalWeeks: assignment.successionIntervalWeeks || '',
+    season: assignment.season || CURRENT_YEAR,
+  });
+
+  const selectedCrop = getCropById(form.cropId);
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function handleCropChange(cropId) {
+    const crop = getCropById(cropId);
+    setForm(f => ({
+      ...f,
+      cropId,
+      expectedHarvestDate: f.sowDate && crop?.degreesDaysToHarvest
+        ? addWeeks(f.sowDate, Math.round(crop.degreesDaysToHarvest / 100))
+        : f.expectedHarvestDate,
+    }));
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.bedId || !form.cropId || !form.sowDate) return;
+    onSave({
+      ...form,
+      successionIntervalWeeks: form.successionIntervalWeeks
+        ? parseInt(form.successionIntervalWeeks) : null,
+    });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{isNew ? 'Add crop to bed' : 'Edit planting'}</span>
+          <button className="btn btn-ghost modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Crop *</label>
+              <select className="form-control" value={form.cropId}
+                onChange={e => handleCropChange(e.target.value)}>
+                {CROPS.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.perennial ? ' (perennial)' : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedCrop && (
+              <div className="crop-hint-bar"
+                style={{ background: getFamilyBgColor(selectedCrop.family), borderColor: getFamilyColor(selectedCrop.family) + '55' }}>
+                <span className="family-badge"
+                  style={{ background: getFamilyColor(selectedCrop.family) + '22', color: getFamilyColor(selectedCrop.family) }}>
+                  {selectedCrop.familyCommon}
+                </span>
+                <span className="text-xs text-muted">
+                  Sow: {selectedCrop.sowWindowStart ? `${MONTHS[selectedCrop.sowWindowStart - 1]}–${MONTHS[selectedCrop.sowWindowEnd - 1]}` : 'n/a'}
+                  {' · '}Harvest: {selectedCrop.harvestWindowStart ? `${MONTHS[selectedCrop.harvestWindowStart - 1]}–${MONTHS[selectedCrop.harvestWindowEnd - 1]}` : 'n/a'}
+                  {selectedCrop.perennial && ' · Perennial'}
+                </span>
+              </div>
+            )}
+
+            {/* Rotation warning */}
+            {(() => {
+              if (!form.bedId || !selectedCrop || selectedCrop.perennial) return null;
+              const rg = selectedCrop.rotationGroup;
+              const gap = ROTATION_GAP[rg];
+              if (!gap) return null;
+              for (let y = CURRENT_YEAR - 1; y >= CURRENT_YEAR - gap; y--) {
+                const clash = history.find(h =>
+                  h.bedId === form.bedId && h.year === y &&
+                  getCropById(h.cropId)?.rotationGroup === rg
+                );
+                if (clash) {
+                  const bed = beds.find(b => b.id === form.bedId);
+                  return (
+                    <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+                      <span className="alert-icon">⚠️</span>
+                      <div className="alert-body">
+                        <div className="alert-title">Rotation warning</div>
+                        <div className="alert-text">
+                          {clash.cropName} ({rg} family) was in {bed?.name || 'this bed'} in {y}.
+                          Recommended gap: {gap} years.
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+
+            <div className="form-row form-row-2">
+              <div className="form-group">
+                <label className="form-label">Variety (optional)</label>
+                <input className="form-control" value={form.variety}
+                  onChange={e => set('variety', e.target.value)}
+                  placeholder="e.g. Nantes, Chantenay…" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Status</label>
+                <select className="form-control" value={form.status}
+                  onChange={e => set('status', e.target.value)}>
+                  <option value="planned">Planned</option>
+                  <option value="sown">Sown</option>
+                  <option value="germinated">Germinated</option>
+                  <option value="growing">Growing</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row form-row-2">
+              <div className="form-group">
+                <label className="form-label">Sow / plant date *</label>
+                <input className="form-control" type="date" value={form.sowDate}
+                  onChange={e => set('sowDate', e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Expected harvest / flower</label>
+                <input className="form-control" type="date" value={form.expectedHarvestDate}
+                  onChange={e => set('expectedHarvestDate', e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary">{isNew ? 'Add' : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── BedDetailModal ────────────────────────────────────────────────────────────
+const STATUS_LABELS = { planned: 'Planned', sown: 'Sown', germinated: 'Germinated', growing: 'Growing' };
+const STATUS_COLORS = { planned: '#6b7280', sown: '#0891b2', germinated: '#059669', growing: '#16a34a' };
+
+function getTask(assignment) {
+  const crop = getCropById(assignment.cropId);
+  const today = new Date();
+  const sowDate = assignment.sowDate ? new Date(assignment.sowDate + 'T12:00:00') : null;
+  const harvestDate = assignment.expectedHarvestDate ? new Date(assignment.expectedHarvestDate + 'T12:00:00') : null;
+  const daysToHarvest = harvestDate ? Math.round((harvestDate - today) / 86400000) : null;
+
+  switch (assignment.status) {
+    case 'planned': {
+      if (!sowDate) return 'Prepare bed';
+      const daysUntil = Math.round((sowDate - today) / 86400000);
+      if (daysUntil <= 0) return 'Ready to sow';
+      if (daysUntil <= 7) return `Sow in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+      return 'Prepare bed';
+    }
+    case 'sown':
+      return `Check for germination${crop?.daysToGermination ? ` (~${crop.daysToGermination} days)` : ''}`;
+    case 'germinated':
+      return crop?.spacingCm ? `Thin to ${crop.spacingCm} cm spacing` : 'Thin seedlings';
+    case 'growing':
+      if (daysToHarvest !== null && daysToHarvest >= 0 && daysToHarvest <= 21)
+        return `Harvest in ~${daysToHarvest} day${daysToHarvest === 1 ? '' : 's'}`;
+      return 'Water regularly, watch for pests';
+    default:
+      return null;
+  }
+}
+
+function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onDeleteAssignment, onClose }) {
+  const bedAssignments = assignments.filter(a => a.bedId === bed.id);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header" style={{ borderBottom: `3px solid ${bed.color || '#52b788'}` }}>
+          <span className="modal-title">{bed.name}</span>
+          <div className="flex gap-1 items-center">
+            <button className="btn btn-ghost btn-sm" onClick={onEditBed}>Edit bed</button>
+            <button className="btn btn-ghost modal-close" onClick={onClose}>✕</button>
+          </div>
+        </div>
+        <div className="modal-body" style={{ padding: '1rem' }}>
+          <p className="text-xs text-muted" style={{ marginBottom: '0.75rem' }}>
+            {bed.widthM} × {bed.lengthM} m{bed.notes ? ` · ${bed.notes}` : ''}
+          </p>
+
+          {bedAssignments.length === 0 ? (
+            <p style={{ textAlign: 'center', padding: '1.5rem 0', color: 'var(--gray-500)', fontSize: '0.875rem', fontStyle: 'italic' }}>
+              Nothing planted here yet.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {bedAssignments.map(a => {
+                const crop = getCropById(a.cropId);
+                const col  = crop ? getFamilyColor(crop.family) : '#6b7280';
+                const task = getTask(a);
+                return (
+                  <div key={a.id} style={{
+                    background: '#f9fafb',
+                    border: '1px solid #e5e7eb',
+                    borderLeft: `4px solid ${col}`,
+                    borderRadius: '6px',
+                    padding: '0.6rem 0.75rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem',
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                          {crop?.name || a.cropId}
+                        </span>
+                        {a.variety && (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{a.variety}</span>
+                        )}
+                        <span style={{
+                          fontSize: '0.68rem',
+                          background: (STATUS_COLORS[a.status] || '#6b7280') + '22',
+                          color: STATUS_COLORS[a.status] || '#6b7280',
+                          borderRadius: '9999px',
+                          padding: '1px 7px',
+                          fontWeight: 600,
+                        }}>
+                          {STATUS_LABELS[a.status] || a.status}
+                        </span>
+                      </div>
+                      {a.sowDate && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginTop: '0.15rem' }}>
+                          Planted {new Date(a.sowDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          {a.expectedHarvestDate && ` · Ready ~${new Date(a.expectedHarvestDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                        </div>
+                      )}
+                      {task && (
+                        <div style={{ fontSize: '0.72rem', color: '#d97706', marginTop: '0.2rem', fontWeight: 500 }}>
+                          → {task}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--gray-400)', padding: '2px 6px', flexShrink: 0 }}
+                      onClick={() => onDeleteAssignment(a.id)}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Close</button>
+          <button className="btn btn-primary" onClick={onAddCrop}>+ Add crop</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── DraggableGrid ─────────────────────────────────────────────────────────────
-function DraggableGrid({ beds, onUpdate, onEdit }) {
-  const gridRef   = useRef(null);
-  const dragRef   = useRef(null);   // drag metadata — read by event handlers
-  const previewRef = useRef(null);  // mirror of preview state — for reading in handleUp
+function DraggableGrid({ beds, onUpdate, onBedClick }) {
+  const gridRef    = useRef(null);
+  const dragRef    = useRef(null);
+  const previewRef = useRef(null);
 
   const [isDragging,   setIsDragging]   = useState(false);
   const [previewState, setPreviewState] = useState(null);
 
-  // Convert client coordinates to 1-indexed grid column/row
   function getCell(clientX, clientY) {
     const el = gridRef.current;
     if (!el) return { col: 1, row: 1 };
@@ -175,7 +467,6 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
   }
 
   function startDrag(e, bed, type) {
-    // Don't grab on resize handle — that fires its own startDrag
     e.preventDefault();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
@@ -188,7 +479,7 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
     const p = { bedId: bed.id, gridX: bx, gridY: by, widthCells: bw, lengthCells: bh };
     dragRef.current = {
       bed, type,
-      offsetCellX: col - bx,  // which cell within the bed was grabbed (for move)
+      offsetCellX: col - bx,
       offsetCellY: row - by,
       origGridX: bx, origGridY: by,
       origW: bw, origH: bh,
@@ -200,18 +491,16 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
     setIsDragging(true);
   }
 
-  // Register/unregister global handlers only while a drag is active
   useEffect(() => {
     if (!isDragging) return;
 
     function handleMove(e) {
       const d = dragRef.current;
       if (!d) return;
-      if (e.cancelable) e.preventDefault(); // stop page scroll on touch
+      if (e.cancelable) e.preventDefault();
       const cx = e.touches ? e.touches[0].clientX : e.clientX;
       const cy = e.touches ? e.touches[0].clientY : e.clientY;
 
-      // Mark as a real drag once cursor moves more than 4px
       if (Math.abs(cx - d.startCX) > 4 || Math.abs(cy - d.startCY) > 4) d.moved = true;
       if (!d.moved) return;
 
@@ -227,7 +516,6 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
           lengthCells: d.origH,
         };
       } else {
-        // resize: anchor is top-left; new size = distance from anchor to cursor
         p = {
           bedId:       d.bed.id,
           gridX:       d.origGridX,
@@ -252,10 +540,9 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
           lengthCells: p.lengthCells,
         });
       } else if (d && !d.moved) {
-        // Tap/click with no movement → open edit modal
-        onEdit(d.bed);
+        onBedClick(d.bed);
       }
-      dragRef.current  = null;
+      dragRef.current    = null;
       previewRef.current = null;
       setPreviewState(null);
       setIsDragging(false);
@@ -271,9 +558,8 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
       document.removeEventListener('touchmove', handleMove);
       document.removeEventListener('touchend',  handleUp);
     };
-  }, [isDragging, onUpdate, onEdit]);
+  }, [isDragging, onUpdate, onBedClick]);
 
-  // Apply preview to the bed being dragged
   const renderedBeds = beds.map(bed => {
     const p = previewState;
     if (p && p.bedId === bed.id) {
@@ -296,12 +582,10 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
           cursor: isDragging ? 'grabbing' : 'default',
         }}
       >
-        {/* Background grid cells */}
         {Array.from({ length: GRID_ROWS * GRID_COLS }).map((_, i) => (
           <div key={i} className="plot-cell" />
         ))}
 
-        {/* Beds */}
         {renderedBeds.map(bed => {
           const isActive = previewState?.bedId === bed.id;
           const col  = clamp(bed.gridX       ?? 1, 1, GRID_COLS);
@@ -334,7 +618,6 @@ function DraggableGrid({ beds, onUpdate, onEdit }) {
               <span className="plot-bed-name">{bed.name}</span>
               <span className="plot-bed-dims">{bed.widthM}×{bed.lengthM}m</span>
 
-              {/* Resize handle — bottom-right corner */}
               <div
                 className="plot-resize-handle"
                 title="Drag to resize"
@@ -410,13 +693,14 @@ function BedCard({ bed, assignments, onEdit, onDelete }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PlotLayout() {
   const { dispatch } = useApp();
-  const beds        = useBeds();
-  const assignments = useActiveAssignments();
+  const beds         = useBeds();
+  const assignments  = useActiveAssignments();
+  const history      = useHistory();
 
   const [modal, setModal] = useState(null);
   const [view,  setView]  = useState('grid');
 
-  function handleSave(form) {
+  function handleSaveBed(form) {
     if (modal.type === 'add') {
       dispatch({ type: 'ADD_BED', payload: form });
     } else {
@@ -425,12 +709,26 @@ export default function PlotLayout() {
     setModal(null);
   }
 
-  function handleDelete() {
+  function handleDeleteBed() {
     dispatch({ type: 'DELETE_BED', payload: { id: modal.bed.id } });
     setModal(null);
   }
 
-  // Commit a drag result directly (no modal needed)
+  function handleSaveAssignment(form) {
+    if (modal.assignmentId) {
+      dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: modal.assignmentId, ...form } });
+    } else {
+      dispatch({ type: 'ADD_ASSIGNMENT', payload: form });
+    }
+    // Return to bed detail after saving
+    const bed = beds.find(b => b.id === (form.bedId || modal.bedId));
+    setModal(bed ? { type: 'bed-detail', bed } : null);
+  }
+
+  function handleDeleteAssignment(assignmentId) {
+    dispatch({ type: 'DELETE_ASSIGNMENT', payload: { id: assignmentId } });
+  }
+
   const handleGridUpdate = useCallback((bedId, changes) => {
     dispatch({ type: 'UPDATE_BED', payload: { id: bedId, ...changes } });
   }, [dispatch]);
@@ -466,7 +764,7 @@ export default function PlotLayout() {
         <div className="card" style={{ marginBottom: '1rem' }}>
           <div className="card-header">
             <span className="card-title">Plot map</span>
-            <span className="text-xs text-muted">Drag to move · drag ↘ corner to resize · click to edit</span>
+            <span className="text-xs text-muted">Click bed to see what's growing · drag to move · drag ↘ to resize</span>
           </div>
           <div className="card-body" style={{ padding: '0.75rem', overflowX: 'auto' }}>
             {beds.length === 0 ? (
@@ -479,21 +777,21 @@ export default function PlotLayout() {
               <DraggableGrid
                 beds={beds}
                 onUpdate={handleGridUpdate}
-                onEdit={b => setModal({ type: 'edit', bed: b })}
+                onBedClick={b => setModal({ type: 'bed-detail', bed: b })}
               />
             )}
           </div>
           {beds.length > 0 && (
             <div className="card-footer">
               <p className="text-xs text-muted">
-                Each cell ≈ 0.5 m. Drag beds to reposition — drag the ↘ handle in the corner to resize.
+                Each cell ≈ 0.5 m. Click a bed to view plantings — drag to reposition — drag ↘ handle to resize.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* Bed cards (always shown below map, or full list in list view) */}
+      {/* Bed cards */}
       {beds.length === 0 && view === 'list' ? (
         <div className="empty-state card" style={{ padding: '3rem' }}>
           <div className="empty-state-icon">⬜</div>
@@ -516,13 +814,32 @@ export default function PlotLayout() {
 
       {/* Modals */}
       {modal?.type === 'add' && (
-        <BedModal onSave={handleSave} onClose={() => setModal(null)} bedCount={beds.length} />
+        <BedModal onSave={handleSaveBed} onClose={() => setModal(null)} bedCount={beds.length} />
       )}
       {modal?.type === 'edit' && (
-        <BedModal bed={modal.bed} onSave={handleSave} onClose={() => setModal(null)} bedCount={beds.length} />
+        <BedModal bed={modal.bed} onSave={handleSaveBed} onClose={() => setModal(null)} bedCount={beds.length} />
       )}
       {modal?.type === 'delete' && (
-        <DeleteModal bed={modal.bed} onConfirm={handleDelete} onClose={() => setModal(null)} />
+        <DeleteModal bed={modal.bed} onConfirm={handleDeleteBed} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'bed-detail' && (
+        <BedDetailModal
+          bed={modal.bed}
+          assignments={assignments}
+          onAddCrop={() => setModal({ type: 'add-assignment', bedId: modal.bed.id, fromBed: modal.bed })}
+          onEditBed={() => setModal({ type: 'edit', bed: modal.bed })}
+          onDeleteAssignment={handleDeleteAssignment}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'add-assignment' && (
+        <AssignmentModal
+          bedId={modal.bedId}
+          beds={beds}
+          history={history}
+          onSave={handleSaveAssignment}
+          onClose={() => setModal({ type: 'bed-detail', bed: modal.fromBed })}
+        />
       )}
     </div>
   );
