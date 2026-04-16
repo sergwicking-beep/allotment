@@ -164,7 +164,7 @@ function DeleteModal({ bed, onConfirm, onClose }) {
 }
 
 // ── AssignmentModal ───────────────────────────────────────────────────────────
-function AssignmentModal({ assignment, bedId, beds, history, onSave, onClose }) {
+function AssignmentModal({ assignment, bedId, beds, history, onSave, onHarvest, onClose }) {
   const isNew = !assignment;
   const [form, setForm] = useState(() => isNew ? {
     bedId: bedId || beds[0]?.id || '',
@@ -310,6 +310,13 @@ function AssignmentModal({ assignment, bedId, beds, history, onSave, onClose }) 
             </div>
           </div>
           <div className="modal-footer">
+            {!isNew && onHarvest && (
+              <button type="button" className="btn btn-secondary"
+                style={{ marginRight: 'auto', color: '#d97706', borderColor: '#d97706' }}
+                onClick={onHarvest}>
+                Mark harvested
+              </button>
+            )}
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary">{isNew ? 'Add' : 'Save'}</button>
           </div>
@@ -351,7 +358,7 @@ function getTask(assignment) {
   }
 }
 
-function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onDeleteAssignment, onClose }) {
+function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onEditAssignment, onDeleteAssignment, onClose }) {
   const bedAssignments = assignments.filter(a => a.bedId === bed.id);
 
   return (
@@ -422,14 +429,24 @@ function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onDeleteAssign
                         </div>
                       )}
                     </div>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--gray-400)', padding: '2px 6px', flexShrink: 0 }}
-                      onClick={() => onDeleteAssignment(a.id)}
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                        onClick={() => onEditAssignment(a)}
+                        title="Edit"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--gray-400)', padding: '2px 6px' }}
+                        onClick={() => onDeleteAssignment(a.id)}
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -720,8 +737,13 @@ export default function PlotLayout() {
     } else {
       dispatch({ type: 'ADD_ASSIGNMENT', payload: form });
     }
-    // Return to bed detail after saving
     const bed = beds.find(b => b.id === (form.bedId || modal.bedId));
+    setModal(bed ? { type: 'bed-detail', bed } : null);
+  }
+
+  function handleHarvestAssignment() {
+    dispatch({ type: 'HARVEST_ASSIGNMENT', payload: { id: modal.assignmentId } });
+    const bed = modal.fromBed;
     setModal(bed ? { type: 'bed-detail', bed } : null);
   }
 
@@ -828,6 +850,7 @@ export default function PlotLayout() {
           assignments={assignments}
           onAddCrop={() => setModal({ type: 'add-assignment', bedId: modal.bed.id, fromBed: modal.bed })}
           onEditBed={() => setModal({ type: 'edit', bed: modal.bed })}
+          onEditAssignment={a => setModal({ type: 'edit-assignment', assignment: a, assignmentId: a.id, bedId: a.bedId, fromBed: modal.bed })}
           onDeleteAssignment={handleDeleteAssignment}
           onClose={() => setModal(null)}
         />
@@ -838,6 +861,17 @@ export default function PlotLayout() {
           beds={beds}
           history={history}
           onSave={handleSaveAssignment}
+          onClose={() => setModal({ type: 'bed-detail', bed: modal.fromBed })}
+        />
+      )}
+      {modal?.type === 'edit-assignment' && (
+        <AssignmentModal
+          assignment={modal.assignment}
+          bedId={modal.bedId}
+          beds={beds}
+          history={history}
+          onSave={handleSaveAssignment}
+          onHarvest={handleHarvestAssignment}
           onClose={() => setModal({ type: 'bed-detail', bed: modal.fromBed })}
         />
       )}
