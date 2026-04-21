@@ -3,16 +3,19 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './store/AppContext';
 import Layout from './components/Layout';
 
-// Lazy-load pages — filled in per chunk
-const Dashboard      = lazy(() => import('./pages/Dashboard'));
-const PlotLayout     = lazy(() => import('./pages/PlotLayout'));
-const CropBrowser    = lazy(() => import('./pages/CropBrowser'));
-const CropDetail     = lazy(() => import('./pages/CropDetail'));
-const Calendar       = lazy(() => import('./pages/Calendar'));
-const Rotation       = lazy(() => import('./pages/Rotation'));
-const ColdFrame      = lazy(() => import('./pages/ColdFrame'));
-const SeedStock      = lazy(() => import('./pages/SeedStock'));
-const Settings       = lazy(() => import('./pages/Settings'));
+const Track      = lazy(() => import('./pages/Track'));
+const PlotLayout = lazy(() => import('./pages/PlotLayout'));
+const Plan       = lazy(() => import('./pages/Plan'));
+const CropDetail = lazy(() => import('./pages/CropDetail'));
+const Settings   = lazy(() => import('./pages/Settings'));
+
+// Legacy pages — still reachable by direct URL but not in the main nav
+const Dashboard  = lazy(() => import('./pages/Dashboard'));
+const CropBrowser = lazy(() => import('./pages/CropBrowser'));
+const Calendar   = lazy(() => import('./pages/Calendar'));
+const Rotation   = lazy(() => import('./pages/Rotation'));
+const ColdFrame  = lazy(() => import('./pages/ColdFrame'));
+const SeedStock  = lazy(() => import('./pages/SeedStock'));
 
 function PageFallback() {
   return <div className="spinner" />;
@@ -25,15 +28,24 @@ export default function App() {
         <Layout>
           <Suspense fallback={<PageFallback />}>
             <Routes>
-              <Route path="/"            element={<Dashboard />} />
-              <Route path="/plot"        element={<PlotLayout />} />
-              <Route path="/crops"       element={<CropBrowser />} />
-              <Route path="/crops/:id"   element={<CropDetail />} />
-              <Route path="/calendar"    element={<Calendar />} />
-              <Route path="/rotation"    element={<Rotation />} />
-              <Route path="/cold-frame"  element={<ColdFrame />} />
-              <Route path="/seeds"       element={<SeedStock />} />
-              <Route path="/settings"    element={<Settings />} />
+              {/* Main 3-tab routes */}
+              <Route path="/"          element={<Track />} />
+              <Route path="/plot"      element={<PlotLayout />} />
+              <Route path="/plan"      element={<Plan />} />
+
+              {/* Crop detail — linked from bed panels */}
+              <Route path="/crops/:id" element={<CropDetail />} />
+
+              {/* Settings */}
+              <Route path="/settings"  element={<Settings />} />
+
+              {/* Legacy routes — accessible by URL, not shown in nav */}
+              <Route path="/dashboard"  element={<Dashboard />} />
+              <Route path="/crops"      element={<CropBrowser />} />
+              <Route path="/calendar"   element={<Calendar />} />
+              <Route path="/rotation"   element={<Rotation />} />
+              <Route path="/cold-frame" element={<ColdFrame />} />
+              <Route path="/seeds"      element={<SeedStock />} />
             </Routes>
           </Suspense>
         </Layout>
