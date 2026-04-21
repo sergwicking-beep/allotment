@@ -11,6 +11,8 @@ const MONTH_W       = 72;
 const LABEL_W       = 150;
 const ROW_H         = 64;
 
+const ROTATION_GAP = { Brassica: 3, Potato: 3, Allium: 3, Root: 2, Legume: 2, Cucurbit: 2 };
+
 // ── date helpers ───────────────────────────────────────────────────────────────
 
 function addWeeks(dateStr, n) {
@@ -202,7 +204,7 @@ const PROGRESS_COLORS = {
 // Growing-bar fill opacity based on progress
 const BAR_FILL = {
   planned: '18', sowing_indoor: '18', germinated_indoor: '20',
-  sown: '30', germinated: '45', growing: '60', harvested: '80',
+  sown: '30', germinated: '45', growing: '60', harvested: '80', failed: '20',
 };
 
 function generateMonths(minDate, maxDate) {
@@ -503,30 +505,95 @@ function GanttChart({ rows, months, onRowClick }) {
 
 // ── Assignment Drawer ─────────────────────────────────────────────────────────
 
-const STATUS_FLOW = ['planned', 'sown', 'germinated', 'growing', 'harvested'];
-
-const CF_STAGES = [
-  { key: 'just_sown',       label: 'Just sown'       },
-  { key: 'germinated',      label: 'Germinated'       },
-  { key: 'growing_on',      label: 'Growing on'       },
-  { key: 'ready_to_harden', label: 'Ready to harden'  },
-  { key: 'hardening_off',   label: 'Hardening off'    },
+// Unified lifecycle for crops that go through cold frame first
+const INDOOR_STAGES = [
+  { id: 'sown_indoors',        label: 'Sown in cold frame',      color: '#6366f1' },
+  { id: 'germinating_indoors', label: 'Germinating (cold frame)', color: '#84cc16' },
+  { id: 'growing_indoors',     label: 'Growing on (indoors)',     color: '#22c55e' },
+  { id: 'hardening',           label: 'Hardening off',            color: '#f59e0b' },
+  { id: 'transplanted',        label: 'Transplanted outside',     color: '#16a34a' },
+  { id: 'growing_outside',     label: 'Growing outside',          color: '#15803d' },
+  { id: 'harvested',           label: 'Harvested',                color: '#15803d' },
+  { id: 'not_germinated',      label: 'Not germinated',           color: '#ef4444' },
 ];
+
+// Lifecycle for direct-sow crops
+const DIRECT_STAGES = [
+  { id: 'planned',        label: 'Planned',            color: '#9ca3af' },
+  { id: 'sown_outside',   label: 'Sown outside',       color: '#3b82f6' },
+  { id: 'germinating',    label: 'Germinating',         color: '#84cc16' },
+  { id: 'growing',        label: 'Growing',             color: '#16a34a' },
+  { id: 'harvested',      label: 'Harvested',           color: '#15803d' },
+  { id: 'not_germinated', label: 'Not germinated',      color: '#ef4444' },
+];
+
+function getActiveStageId(cfEntry, assignment, isIndoor) {
+  const cfStage = cfEntry?.stage;
+  const aStatus = assignment?.status;
+  if (aStatus === 'failed' || cfStage === 'failed_to_germinate') return 'not_germinated';
+  if (aStatus === 'harvested') return 'harvested';
+  if (isIndoor) {
+    if (aStatus === 'growing')  return 'growing_outside';
+    if (aStatus === 'sown')     return 'transplanted';
+    if (cfStage === 'hardening_off' || cfStage === 'ready_to_harden') return 'hardening';
+    if (cfStage === 'growing_on')  return 'growing_indoors';
+    if (cfStage === 'germinated')  return 'germinating_indoors';
+    return 'sown_indoors';
+  }
+  if (aStatus === 'growing')    return 'growing';
+  if (aStatus === 'germinated') return 'germinating';
+  if (aStatus === 'sown')       return 'sown_outside';
+  return 'planned';
+}
+
+function applyStage(stageId, cfEntry, assignment, dispatch) {
+  const cfId = cfEntry?.id;
+  const aId  = assignment?.id;
+  const upCf = (stage)  => cfId && dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: cfId, stage } });
+  const upA  = (status) => aId  && dispatch({ type: 'UPDATE_ASSIGNMENT',       payload: { id: aId,  status } });
+  switch (stageId) {
+    case 'sown_indoors':        upCf('just_sown');          upA('planned');    break;
+    case 'germinating_indoors': upCf('germinated');          upA('planned');    break;
+    case 'growing_indoors':     upCf('growing_on');          upA('planned');    break;
+    case 'hardening':           upCf('hardening_off');       upA('planned');    break;
+    case 'transplanted':        upCf('hardening_off');       upA('sown');       break;
+    case 'growing_outside':                                   upA('growing');    break;
+    case 'planned':                                           upA('planned');    break;
+    case 'sown_outside':                                      upA('sown');       break;
+    case 'germinating':                                       upA('germinated'); break;
+    case 'growing':                                           upA('growing');    break;
+    case 'harvested':                                         upA('harvested');  break;
+    case 'not_germinated':      upCf('failed_to_germinate'); upA('failed');     break;
+    default: break;
+  }
+}
 
 function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, onClose }) {
   const crop  = getCropById(row.cropId);
   const color = row.color;
 
-  const isCf       = String(row.rowId).startsWith('cf-');
-  const assignment = isCf ? null : assignments.find(a => a.id === row.rowId);
-  const cfEntry    = isCf ? coldFrameEntries.find(e => e.id === row.rowId.slice(3)) : null;
+  const isCfRow    = String(row.rowId).startsWith('cf-');
+  const assignment = isCfRow ? null : assignments.find(a => a.id === row.rowId);
+  // Find any CF entry for this crop (even when the row is an outdoor assignment)
+  const cfEntry    = isCfRow
+    ? coldFrameEntries.find(e => e.id === row.rowId.slice(3))
+    : coldFrameEntries.find(e => e.cropId === row.cropId);
+
+  const isIndoor = Boolean(cfEntry) ||
+    crop?.propagation === 'cold_frame' ||
+    (crop?.propagation === 'both' && crop?.weeksInColdFrame);
+
+  const stages      = isIndoor ? INDOOR_STAGES : DIRECT_STAGES;
+  const activeStage = getActiveStageId(cfEntry, assignment, isIndoor);
+
+  // For CF-only rows, hide outdoor stages that have no assignment to back them
+  const visibleStages = isCfRow && !assignment
+    ? stages.filter(s => !['transplanted', 'growing_outside', 'growing', 'harvested'].includes(s.id))
+    : stages;
 
   return (
     <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, zIndex: 40,
-        background: 'rgba(0,0,0,0.28)',
-      }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.28)' }} />
 
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
@@ -540,7 +607,7 @@ function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '4px', flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827' }}>{row.label}</span>
               {crop && (
                 <span style={{ fontSize: '0.65rem', background: color + '20', color, borderRadius: 9999, padding: '1px 8px', fontWeight: 600 }}>
@@ -548,8 +615,11 @@ function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, 
                 </span>
               )}
             </div>
-            {row.sublabel && (
-              <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{row.sublabel}</div>
+            {row.sublabel && <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{row.sublabel}</div>}
+            {crop && (
+              <Link to={`/crops/${crop.id}`} onClick={onClose} style={{ fontSize: '0.75rem', color: '#16a34a', textDecoration: 'none', fontWeight: 500 }}>
+                How to grow {crop.name} →
+              </Link>
             )}
           </div>
           <button onClick={onClose} style={{
@@ -560,108 +630,166 @@ function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, 
           }}>×</button>
         </div>
 
-        {/* Outdoor assignment */}
+        {/* Lifecycle stage buttons */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+            Where is it now?
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {visibleStages.map(s => {
+              const active = activeStage === s.id;
+              return (
+                <button key={s.id}
+                  onClick={() => applyStage(s.id, cfEntry, assignment, dispatch)}
+                  style={{
+                    padding: '0.3rem 0.75rem', borderRadius: 20,
+                    border: `1.5px solid ${active ? s.color : '#e5e7eb'}`,
+                    background: active ? s.color + '22' : '#fff',
+                    color: active ? s.color : '#6b7280',
+                    fontWeight: active ? 700 : 400,
+                    fontSize: '0.78rem', cursor: 'pointer',
+                    transition: 'all 100ms',
+                  }}>
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bed assignment (outdoor assignments only) */}
         {assignment && (
-          <>
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                Status
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {STATUS_FLOW.map(s => {
-                  const active = assignment.status === s;
-                  const col    = PROGRESS_COLORS[s] || '#9ca3af';
-                  return (
-                    <button key={s}
-                      onClick={() => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: assignment.id, status: s } })}
-                      style={{
-                        padding: '0.3rem 0.75rem', borderRadius: 20,
-                        border: `1.5px solid ${active ? col : '#e5e7eb'}`,
-                        background: active ? col + '25' : '#fff',
-                        color: active ? col : '#6b7280',
-                        fontWeight: active ? 700 : 400,
-                        fontSize: '0.78rem', cursor: 'pointer',
-                        transition: 'all 100ms',
-                      }}>
-                      {PROGRESS_LABELS[s] || s}
-                    </button>
-                  );
-                })}
-              </div>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+              Bed
             </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                Bed
-              </div>
-              <select
-                className="form-control"
-                value={assignment.bedId || ''}
-                onChange={e => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: assignment.id, bedId: e.target.value } })}
-                style={{ fontSize: '0.85rem' }}
-              >
-                <option value="">No bed assigned</option>
-                {beds.filter(b => b.active).map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {(assignment.sowDate || assignment.expectedHarvestDate) && (
-              <div style={{ fontSize: '0.78rem', color: '#9ca3af', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                {assignment.sowDate && (
-                  <span>🌱 Sow: <strong style={{ color: '#374151' }}>{assignment.sowDate}</strong></span>
-                )}
-                {assignment.expectedHarvestDate && (
-                  <span>🧺 Harvest: <strong style={{ color: '#374151' }}>{assignment.expectedHarvestDate}</strong></span>
-                )}
-              </div>
-            )}
-          </>
+            <select
+              className="form-control"
+              value={assignment.bedId || ''}
+              onChange={e => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: assignment.id, bedId: e.target.value } })}
+              style={{ fontSize: '0.85rem' }}
+            >
+              <option value="">No bed assigned</option>
+              {beds.filter(b => b.active).map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
         )}
 
-        {/* Cold-frame entry */}
-        {cfEntry && (
-          <>
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                Stage
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {CF_STAGES.map(s => {
-                  const active = cfEntry.stage === s.key;
-                  const col    = '#3b82f6';
-                  return (
-                    <button key={s.key}
-                      onClick={() => dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: cfEntry.id, stage: s.key } })}
-                      style={{
-                        padding: '0.3rem 0.75rem', borderRadius: 20,
-                        border: `1.5px solid ${active ? col : '#e5e7eb'}`,
-                        background: active ? col + '20' : '#fff',
-                        color: active ? col : '#6b7280',
-                        fontWeight: active ? 700 : 400,
-                        fontSize: '0.78rem', cursor: 'pointer',
-                        transition: 'all 100ms',
-                      }}>
-                      {s.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {cfEntry.sowDate && (
-              <div style={{ fontSize: '0.78rem', color: '#9ca3af' }}>
-                🏡 Started indoors: <strong style={{ color: '#374151' }}>{cfEntry.sowDate}</strong>
-              </div>
+        {/* Key dates */}
+        {(assignment?.sowDate || assignment?.expectedHarvestDate || cfEntry?.sowDate) && (
+          <div style={{ fontSize: '0.78rem', color: '#9ca3af', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            {(assignment?.sowDate || cfEntry?.sowDate) && (
+              <span>🌱 {isIndoor ? 'Started indoors' : 'Sown'}: <strong style={{ color: '#374151' }}>{assignment?.sowDate || cfEntry?.sowDate}</strong></span>
             )}
-          </>
-        )}
-
-        {!assignment && !cfEntry && (
-          <p className="text-sm text-muted" style={{ margin: 0 }}>No details available.</p>
+            {assignment?.expectedHarvestDate && (
+              <span>🧺 Expected harvest: <strong style={{ color: '#374151' }}>{assignment.expectedHarvestDate}</strong></span>
+            )}
+          </div>
         )}
       </div>
     </>
+  );
+}
+
+// ── Rotation memo ─────────────────────────────────────────────────────────────
+
+function RotationMemo({ plan, history, beds }) {
+  const [open, setOpen] = useState(false);
+  const lastYear = CURRENT_YEAR - 1;
+
+  // Collect beds referenced in this plan (for plant_out / sow_direct items only)
+  const planBedMap = new Map();
+  plan.forEach(item => {
+    if (item.bed && (item.type === 'sow_direct' || item.type === 'plant_out')) {
+      if (!planBedMap.has(item.bed.id)) planBedMap.set(item.bed.id, { bed: item.bed, crops: [] });
+      planBedMap.get(item.bed.id).crops.push(getCropById(item.cropId));
+    }
+  });
+
+  if (planBedMap.size === 0) return null;
+
+  // Group history by bedId
+  const histByBed = {};
+  history.forEach(h => {
+    if (!histByBed[h.bedId]) histByBed[h.bedId] = [];
+    histByBed[h.bedId].push(h);
+  });
+
+  const memos = [...planBedMap.values()].map(({ bed, crops }) => {
+    const bedHist  = histByBed[bed.id] || [];
+    const prevYear = bedHist.filter(h => h.year === lastYear);
+
+    const warnings = [];
+    crops.forEach(crop => {
+      if (!crop?.rotationGroup) return;
+      const gap = ROTATION_GAP[crop.rotationGroup] || 2;
+      for (let y = 1; y <= gap; y++) {
+        const yr = CURRENT_YEAR - y;
+        if (bedHist.some(h => h.year === yr && h.family === crop.family)) {
+          warnings.push({ crop: crop.name, family: crop.familyCommon || crop.family, lastYear: yr, gap });
+          break;
+        }
+      }
+    });
+
+    return { bed, plannedCrops: crops.filter(Boolean), prevYear, warnings };
+  });
+
+  const totalWarnings = memos.reduce((n, m) => n + m.warnings.length, 0);
+
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: totalWarnings > 0 ? '#fffbeb' : '#f0fdf4',
+          border: `1px solid ${totalWarnings > 0 ? '#fde68a' : '#bbf7d0'}`,
+          borderRadius: 8, padding: '0.6rem 0.85rem', cursor: 'pointer',
+          fontSize: '0.85rem', fontWeight: 600, color: totalWarnings > 0 ? '#92400e' : '#166534',
+        }}>
+        <span>{totalWarnings > 0 ? '⚠️' : '✓'} Rotation check — {memos.length} bed{memos.length !== 1 ? 's' : ''}{totalWarnings > 0 ? ` · ${totalWarnings} warning${totalWarnings !== 1 ? 's' : ''}` : ' · looks good'}</span>
+        <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ border: '1px solid var(--gray-100)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+          {memos.map(({ bed, plannedCrops, prevYear, warnings }) => (
+            <div key={bed.id} style={{ padding: '0.75rem 0.85rem', borderBottom: '1px solid var(--gray-100)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#374151', marginBottom: '0.3rem' }}>{bed.name}</div>
+
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.2rem' }}>
+                <span style={{ fontWeight: 600 }}>Planned: </span>
+                {plannedCrops.map(c => c?.name).join(', ')}
+              </div>
+
+              {prevYear.length > 0 ? (
+                <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                  <span style={{ fontWeight: 600 }}>{lastYear}: </span>
+                  {[...new Set(prevYear.map(h => h.cropName))].join(', ')}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.72rem', color: '#d1d5db', marginBottom: '0.25rem' }}>
+                  No harvest history recorded for {lastYear}
+                </div>
+              )}
+
+              {warnings.map(w => (
+                <div key={w.crop} style={{
+                  fontSize: '0.73rem', color: '#b45309',
+                  background: '#fef3c7', border: '1px solid #fde68a',
+                  padding: '0.25rem 0.5rem', borderRadius: 4, marginTop: '0.3rem',
+                }}>
+                  ⚠️ {w.crop} ({w.family}) last grown here in {w.lastYear} — aim for a {w.gap}-year gap
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -819,6 +947,7 @@ export default function Plan() {
               <GanttChart rows={reviewRows} months={months} />
             </div>
           )}
+          <RotationMemo plan={plan} history={state.history} beds={beds} />
           <div style={{ display: 'flex', gap: '0.75rem', paddingBottom: '5rem' }}>
             <button className="btn btn-secondary" onClick={() => setPhase('pick')}>← Change crops</button>
             <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAccept} disabled={noBeds}>
