@@ -4,15 +4,20 @@ import { CROPS, getCropById, getFamilyColor, getFamilyBgColor } from '../data/cr
 
 const TODAY = new Date().toISOString().split('T')[0];
 
+// Active stages (progress chain)
 const STAGES = [
-  { value: 'just_sown',       label: 'Just sown',         cls: 'stage-just-sown'       },
-  { value: 'germinated',      label: 'Germinated',        cls: 'stage-germinated'      },
-  { value: 'growing_on',      label: 'Growing on',        cls: 'stage-growing-on'      },
-  { value: 'ready_to_harden', label: 'Ready to harden',   cls: 'stage-ready-to-harden' },
-  { value: 'hardening_off',   label: 'Hardening off',     cls: 'stage-hardening-off'   },
+  { value: 'just_sown',  label: 'Sown',       cls: 'stage-just-sown'  },
+  { value: 'germinated', label: 'Germinated',  cls: 'stage-germinated' },
 ];
 
-function stageInfo(value) { return STAGES.find(s => s.value === value) || STAGES[0]; }
+function stageInfo(value) {
+  if (value === 'failed_to_germinate')
+    return { value, label: "Didn't germinate", cls: 'stage-failed' };
+  // Map old stages from previous data to germinated
+  if (['growing_on', 'ready_to_harden', 'hardening_off'].includes(value))
+    return STAGES[1];
+  return STAGES.find(s => s.value === value) || STAGES[0];
+}
 
 function daysSince(dateStr) {
   if (!dateStr) return null;
@@ -36,10 +41,9 @@ function formatDate(dateStr) {
 
 function EntryModal({ entry, onSave, onClose }) {
   const isNew = !entry;
-  const coldFrameCrops = CROPS.filter(c => c.weeksInColdFrame || c.propagation === 'cold_frame' || c.propagation === 'both');
 
   const [form, setForm] = useState(() => isNew ? {
-    cropId: coldFrameCrops[0]?.id || CROPS[0].id,
+    cropId: CROPS.filter(c => !c.perennial)[0]?.id || CROPS[0].id,
     variety: '',
     sowDate: TODAY,
     stage: 'just_sown',
@@ -48,7 +52,7 @@ function EntryModal({ entry, onSave, onClose }) {
     cropId: entry.cropId,
     variety: entry.variety || '',
     sowDate: entry.sowDate || TODAY,
-    stage: entry.stage || 'just_sown',
+    stage: ['growing_on','ready_to_harden','hardening_off'].includes(entry.stage) ? 'germinated' : (entry.stage || 'just_sown'),
     notes: entry.notes || '',
   });
 
@@ -65,7 +69,7 @@ function EntryModal({ entry, onSave, onClose }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">{isNew ? 'Add to cold frame' : 'Edit entry'}</span>
+          <span className="modal-title">{isNew ? 'Add to propagation' : 'Edit entry'}</span>
           <button className="btn btn-ghost modal-close" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -84,7 +88,7 @@ function EntryModal({ entry, onSave, onClose }) {
                 <label className="form-label">Variety (optional)</label>
                 <input className="form-control" value={form.variety}
                   onChange={e => set('variety', e.target.value)}
-                  placeholder="e.g. Nantes, Chantenay…" />
+                  placeholder="e.g. Nantes, Moneymaker…" />
               </div>
             </div>
 
@@ -92,7 +96,7 @@ function EntryModal({ entry, onSave, onClose }) {
               <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
                 <span className="alert-icon">💡</span>
                 <div className="alert-body">
-                  <div className="alert-title">Cold frame tips for {selectedCrop.name}</div>
+                  <div className="alert-title">Tips for {selectedCrop.name}</div>
                   <div className="alert-text">{selectedCrop.coldFrameNotes}</div>
                 </div>
               </div>
@@ -134,93 +138,98 @@ function EntryModal({ entry, onSave, onClose }) {
 
 // ── Entry card ────────────────────────────────────────────────────────────────
 
-function EntryCard({ entry, onEdit, onDelete, onAdvanceStage, onTransplanted }) {
+function EntryCard({ entry, onEdit, onDelete, onGerminated, onPlantOut, onMarkFailed }) {
   const crop    = getCropById(entry.cropId);
   const si      = stageInfo(entry.stage);
   const daysOld = entry.sowDate ? daysSince(entry.sowDate) : null;
+  const isFailed = entry.stage === 'failed_to_germinate';
+
   const weeksTarget = crop?.weeksInColdFrame || 6;
-  const expectedTransplant = entry.sowDate ? addDays(entry.sowDate, weeksTarget * 7) : null;
-  const daysToTransplant = expectedTransplant
-    ? Math.round((new Date(expectedTransplant + 'T12:00:00') - Date.now()) / 86400000) : null;
+  const expectedPlantOut = entry.sowDate ? addDays(entry.sowDate, weeksTarget * 7) : null;
+  const daysToPlantOut = expectedPlantOut
+    ? Math.round((new Date(expectedPlantOut + 'T12:00:00') - Date.now()) / 86400000) : null;
 
-  const currentStageIdx = STAGES.findIndex(s => s.value === entry.stage);
-  const nextStage = STAGES[currentStageIdx + 1];
-
-  // Care hints by stage
   const careHints = {
-    just_sown: 'Keep moist and lid on. Check daily for germination.',
-    germinated: 'Ventilate on days above 10°C. Thin crowded seedlings.',
-    growing_on: 'Pot on if roots reach the bottom. Water regularly.',
-    ready_to_harden: 'Start hardening off: prop lid open for a few hours each day.',
-    hardening_off: 'Increase ventilation daily over 7–14 days. Bring inside if frost forecast.',
+    just_sown:  'Keep moist and check daily for germination.',
+    germinated: 'Thin if crowded. Water in the morning. Keep warm.',
   };
 
   const col = crop ? getFamilyColor(crop.family) : '#6b7280';
-  const bg  = crop ? getFamilyBgColor(crop.family) : '#f3f4f6';
 
   return (
-    <div className="cf-card card">
-      <div className="cf-card-header" style={{ borderLeft: `4px solid ${col}` }}>
+    <div className="cf-card card" style={isFailed ? { opacity: 0.7, borderColor: '#fca5a5' } : {}}>
+      <div className="cf-card-header" style={{ borderLeft: `4px solid ${isFailed ? '#ef4444' : col}` }}>
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold">{crop?.name || entry.cropId}</span>
             {entry.variety && <span className="text-sm text-muted">– {entry.variety}</span>}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <span className={`badge ${si.cls}`}>{si.label}</span>
+            <span className={`badge ${si.cls}`}
+              style={isFailed ? { background: '#fee2e2', color: '#b91c1c' } : {}}>
+              {si.label}
+            </span>
             {daysOld != null && (
               <span className="text-xs text-muted">{daysOld}d old · sown {formatDate(entry.sowDate)}</span>
             )}
           </div>
         </div>
         <div className="flex gap-1">
-          <button className="btn btn-ghost btn-sm" onClick={() => onEdit(entry)}>Edit</button>
+          {!isFailed && <button className="btn btn-ghost btn-sm" onClick={() => onEdit(entry)}>Edit</button>}
           <button className="btn btn-ghost btn-sm text-danger" onClick={() => onDelete(entry)}>✕</button>
         </div>
       </div>
 
       <div className="cf-card-body">
-        {/* Progress bar */}
-        <div className="cf-progress">
-          {STAGES.map((s, i) => (
-            <div key={s.value}
-              className={`cf-progress-step ${
-                i < currentStageIdx ? 'done' :
-                i === currentStageIdx ? 'current' : 'future'
-              }`}>
-              <div className="cf-progress-dot" style={{ background: i <= currentStageIdx ? col : undefined }} />
-              <span className="cf-progress-label">{s.label.split(' ')[0]}</span>
+        {/* Progress bar (only for active stages) */}
+        {!isFailed && (
+          <div className="cf-progress">
+            {STAGES.map((s, i) => {
+              const currentIdx = STAGES.findIndex(st => st.value === entry.stage);
+              return (
+                <div key={s.value}
+                  className={`cf-progress-step ${
+                    i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future'
+                  }`}>
+                  <div className="cf-progress-dot" style={{ background: i <= currentIdx ? col : undefined }} />
+                  <span className="cf-progress-label">{s.label}</span>
+                </div>
+              );
+            })}
+            {/* Plant out as final step */}
+            <div className="cf-progress-step future">
+              <div className="cf-progress-dot" />
+              <span className="cf-progress-label">Plant out</span>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         {/* Timeline */}
-        {expectedTransplant && (
+        {!isFailed && expectedPlantOut && (
           <div className="cf-timeline">
             <span className="text-xs text-muted">
-              Expected transplant: <strong>{formatDate(expectedTransplant)}</strong>
-              {daysToTransplant != null && (
-                daysToTransplant < 0
-                  ? <span className="text-danger"> ({Math.abs(daysToTransplant)}d overdue)</span>
-                  : daysToTransplant === 0
+              Expected plant out: <strong>{formatDate(expectedPlantOut)}</strong>
+              {daysToPlantOut != null && (
+                daysToPlantOut < 0
+                  ? <span className="text-danger"> ({Math.abs(daysToPlantOut)}d overdue)</span>
+                  : daysToPlantOut === 0
                     ? <span className="text-success"> (today!)</span>
-                    : <span> (in {daysToTransplant}d)</span>
+                    : <span> (in {daysToPlantOut}d)</span>
               )}
             </span>
           </div>
         )}
 
         {/* Care hint */}
-        {careHints[entry.stage] && (
+        {!isFailed && careHints[entry.stage] && (
           <p className="text-xs text-muted cf-care-hint">
             💡 {careHints[entry.stage]}
           </p>
         )}
 
-        {/* Crop cold frame notes */}
-        {crop?.coldFrameNotes && entry.stage === 'hardening_off' && (
-          <p className="text-xs cf-care-hint" style={{ color: 'var(--green-800)' }}>
-            {crop.coldFrameNotes}
+        {isFailed && (
+          <p className="text-xs cf-care-hint" style={{ color: '#b91c1c' }}>
+            Try re-sowing with fresh seed. Check soil temperature and moisture levels.
           </p>
         )}
 
@@ -231,14 +240,24 @@ function EntryCard({ entry, onEdit, onDelete, onAdvanceStage, onTransplanted }) 
         )}
       </div>
 
-      <div className="cf-card-footer">
-        {nextStage ? (
-          <button className="btn btn-secondary btn-sm" onClick={() => onAdvanceStage(entry, nextStage.value)}>
-            Advance to: {nextStage.label} →
+      <div className="cf-card-footer" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {isFailed ? (
+          <button className="btn btn-secondary btn-sm text-danger" onClick={() => onDelete(entry)}>
+            Remove
           </button>
+        ) : entry.stage === 'just_sown' ? (
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={() => onGerminated(entry)}>
+              Germinated →
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{ color: '#b91c1c' }}
+              onClick={() => onMarkFailed(entry)}>
+              Didn't germinate
+            </button>
+          </>
         ) : (
-          <button className="btn btn-primary btn-sm" onClick={() => onTransplanted(entry)}>
-            Mark as transplanted ✓
+          <button className="btn btn-primary btn-sm" onClick={() => onPlantOut(entry)}>
+            Plant out →
           </button>
         )}
       </div>
@@ -264,34 +283,38 @@ export default function ColdFrame() {
 
   function handleDelete(entry) {
     const crop = getCropById(entry.cropId);
-    if (window.confirm(`Remove ${crop?.name || 'this entry'} from cold frame?`)) {
+    if (window.confirm(`Remove ${crop?.name || 'this entry'}?`)) {
       dispatch({ type: 'DELETE_COLD_FRAME_ENTRY', payload: { id: entry.id } });
     }
   }
 
-  function handleAdvanceStage(entry, newStage) {
-    dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: entry.id, stage: newStage } });
+  function handleGerminated(entry) {
+    dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: entry.id, stage: 'germinated' } });
   }
 
-  function handleTransplanted(entry) {
-    if (window.confirm('Mark as transplanted and remove from cold frame?')) {
+  function handleMarkFailed(entry) {
+    dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: entry.id, stage: 'failed_to_germinate' } });
+  }
+
+  function handlePlantOut(entry) {
+    if (window.confirm('Mark as planted out and remove from propagation?')) {
       dispatch({ type: 'DELETE_COLD_FRAME_ENTRY', payload: { id: entry.id } });
     }
   }
 
-  // Sort: most urgent first (harden-off > growing > germinated > just_sown)
-  const stageOrder = { hardening_off: 0, ready_to_harden: 1, growing_on: 2, germinated: 3, just_sown: 4 };
+  // Sort: germinated first, sown next, failed at the bottom
+  const stageOrder = { germinated: 0, just_sown: 1, growing_on: 1, ready_to_harden: 1, hardening_off: 1, failed_to_germinate: 2 };
   const sorted = [...entries].sort((a, b) =>
-    (stageOrder[a.stage] ?? 5) - (stageOrder[b.stage] ?? 5)
+    (stageOrder[a.stage] ?? 1) - (stageOrder[b.stage] ?? 1)
   );
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Cold Frame</h1>
+          <h1 className="page-title">Propagation</h1>
           <p className="page-subtitle">
-            {entries.length} entr{entries.length !== 1 ? 'ies' : 'y'} at home
+            {entries.length} entr{entries.length !== 1 ? 'ies' : 'y'} started
           </p>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'add' })}>
@@ -299,25 +322,12 @@ export default function ColdFrame() {
         </button>
       </div>
 
-      {/* General guidance card */}
-      <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
-        <span className="alert-icon">🏡</span>
-        <div className="alert-body">
-          <div className="alert-title">Cold frame care</div>
-          <div className="alert-text">
-            Ventilate on days above 10°C to prevent damping off.
-            Close the lid before nightfall if frost is forecast.
-            Water in the morning so plants dry before dark.
-          </div>
-        </div>
-      </div>
-
       {entries.length === 0 ? (
         <div className="empty-state card" style={{ padding: '3rem' }}>
-          <div className="empty-state-icon">🏡</div>
-          <div className="empty-state-title">No cold frame entries</div>
+          <div className="empty-state-icon">🌱</div>
+          <div className="empty-state-title">Nothing on the go</div>
           <div className="empty-state-text">
-            Log what you're currently growing at home to track progress and get transplant timing.
+            Log what you're currently sowing indoors to track germination and plant-out timing.
           </div>
           <button className="btn btn-primary" style={{ marginTop: '1rem' }}
             onClick={() => setModal({ type: 'add' })}>
@@ -330,8 +340,9 @@ export default function ColdFrame() {
             <EntryCard key={entry.id} entry={entry}
               onEdit={e => setModal({ type: 'edit', entry: e })}
               onDelete={handleDelete}
-              onAdvanceStage={handleAdvanceStage}
-              onTransplanted={handleTransplanted} />
+              onGerminated={handleGerminated}
+              onMarkFailed={handleMarkFailed}
+              onPlantOut={handlePlantOut} />
           ))}
         </div>
       )}

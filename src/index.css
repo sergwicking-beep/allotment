@@ -519,6 +519,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .stage-growing-on      { background: #fef3c7; color: #92400e; }
 .stage-ready-to-harden { background: #ffe4e6; color: #9f1239; }
 .stage-hardening-off   { background: #f3e8ff; color: #5b21b6; }
+.stage-failed          { background: #fee2e2; color: #b91c1c; }
 
 /* ── Loading spinner ──────────────────────────────────────────────────────── */
 .spinner {

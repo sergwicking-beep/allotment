@@ -1,31 +1,19 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import AiAdvice from './AiAdvice';
 
 const NAV_ITEMS = [
-  { to: '/',           label: 'Dashboard',    icon: '🌱', end: true  },
-  { to: '/plot',       label: 'Plot Layout',  icon: '⬜', end: false },
-  { to: '/crops',      label: 'Crop Browser', icon: '🥕', end: false },
-  { to: '/calendar',   label: 'Calendar',     icon: '📅', end: false },
-  { to: '/rotation',   label: 'Rotation',     icon: '🔄', end: false },
-  { to: '/cold-frame', label: 'Cold Frame',   icon: '🏡', end: false },
-  { to: '/seeds',      label: 'Seed Stock',   icon: '🌰', end: false },
-  { to: '/settings',   label: 'Settings',     icon: '⚙️', end: false },
+  { to: '/',     label: 'Track', icon: '✅', end: true  },
+  { to: '/plot', label: 'Plot',  icon: '🗺️', end: false },
+  { to: '/plan', label: 'Plan',  icon: '🌱', end: false },
 ];
-
-const BOTTOM_NAV = NAV_ITEMS.slice(0, 5);
 
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="app-shell">
-      {/* Sidebar overlay (mobile) */}
       {open && (
-        <div
-          className="sidebar-overlay visible"
-          onClick={() => setOpen(false)}
-        />
+        <div className="sidebar-overlay visible" onClick={() => setOpen(false)} />
       )}
 
       {/* Sidebar */}
@@ -37,6 +25,7 @@ export default function Layout({ children }) {
             <div className="sidebar-logo-sub">Sheffield</div>
           </div>
         </div>
+
         <ul className="nav-list">
           {NAV_ITEMS.map(item => (
             <li key={item.to}>
@@ -52,6 +41,18 @@ export default function Layout({ children }) {
             </li>
           ))}
         </ul>
+
+        {/* Settings at the bottom of the sidebar */}
+        <div style={{ marginTop: 'auto', borderTop: '1px solid var(--gray-100)', padding: '0.75rem 0' }}>
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+            onClick={() => setOpen(false)}
+          >
+            <span className="nav-icon">⚙️</span>
+            <span className="nav-label">Settings</span>
+          </NavLink>
+        </div>
       </aside>
 
       {/* Header */}
@@ -59,18 +60,19 @@ export default function Layout({ children }) {
         <button className="hamburger" onClick={() => setOpen(o => !o)} aria-label="Menu">
           ☰
         </button>
-        <span className="app-header-title">🌿 Sheffield Allotment Planner</span>
+        <span className="app-header-title">🌿 Allotment Planner</span>
+        <NavLink to="/settings" className="btn btn-ghost btn-sm"
+          style={{ padding: '4px 8px', marginLeft: 'auto' }}>
+          ⚙️
+        </NavLink>
       </header>
 
       {/* Main content */}
       <main className="app-main">{children}</main>
 
-      {/* Global AI advice button (floating) */}
-      <AiAdvice />
-
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — 3 tabs + settings */}
       <nav className="bottom-nav">
-        {BOTTOM_NAV.map(item => (
+        {NAV_ITEMS.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -78,13 +80,16 @@ export default function Layout({ children }) {
             className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
           >
             <span className="bottom-nav-icon">{item.icon}</span>
-            <span>{item.label.split(' ')[0]}</span>
+            <span>{item.label}</span>
           </NavLink>
         ))}
-        <button className="bottom-nav-item" onClick={() => setOpen(true)}>
-          <span className="bottom-nav-icon">⋯</span>
-          <span>More</span>
-        </button>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
+        >
+          <span className="bottom-nav-icon">⚙️</span>
+          <span>Settings</span>
+        </NavLink>
       </nav>
     </div>
   );
