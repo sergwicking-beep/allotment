@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp, useBeds } from '../store/AppContext';
 import { CROPS, getCropById, getFamilyColor } from '../data/crops';
@@ -324,7 +324,7 @@ function buildLiveRows(assignments, coldFrameEntries, beds) {
 
 // ── GanttChart ────────────────────────────────────────────────────────────────
 
-function GanttChart({ rows, months }) {
+function GanttChart({ rows, months, onRowClick }) {
   const nowY = new Date().getFullYear();
   const nowM = new Date().getMonth() + 1;
 
@@ -381,10 +381,13 @@ function GanttChart({ rows, months }) {
         {rows.map((row, ri) => {
           const col = row.color;
           return (
-            <div key={row.rowId} style={{
-              display: 'flex', height: ROW_H,
-              borderBottom: ri < rows.length - 1 ? '1px solid var(--gray-100)' : 'none',
-            }}>
+            <div key={row.rowId}
+              onClick={() => onRowClick?.(row)}
+              style={{
+                display: 'flex', height: ROW_H,
+                borderBottom: ri < rows.length - 1 ? '1px solid var(--gray-100)' : 'none',
+                cursor: onRowClick ? 'pointer' : 'default',
+              }}>
 
               {/* Label */}
               <div style={{
@@ -483,7 +486,7 @@ function GanttChart({ rows, months }) {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: done ? '0.6rem' : '0.72rem',
                       boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-                      cursor: 'default', userSelect: 'none',
+                      cursor: onRowClick ? 'pointer' : 'default', userSelect: 'none',
                     }}>
                       {done ? '✓' : TYPE_ICONS[mk.type]}
                     </div>
@@ -498,6 +501,170 @@ function GanttChart({ rows, months }) {
   );
 }
 
+// ── Assignment Drawer ─────────────────────────────────────────────────────────
+
+const STATUS_FLOW = ['planned', 'sown', 'germinated', 'growing', 'harvested'];
+
+const CF_STAGES = [
+  { key: 'just_sown',       label: 'Just sown'       },
+  { key: 'germinated',      label: 'Germinated'       },
+  { key: 'growing_on',      label: 'Growing on'       },
+  { key: 'ready_to_harden', label: 'Ready to harden'  },
+  { key: 'hardening_off',   label: 'Hardening off'    },
+];
+
+function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, onClose }) {
+  const crop  = getCropById(row.cropId);
+  const color = row.color;
+
+  const isCf       = String(row.rowId).startsWith('cf-');
+  const assignment = isCf ? null : assignments.find(a => a.id === row.rowId);
+  const cfEntry    = isCf ? coldFrameEntries.find(e => e.id === row.rowId.slice(3)) : null;
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, zIndex: 40,
+        background: 'rgba(0,0,0,0.28)',
+      }} />
+
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+        background: '#fff', borderRadius: '16px 16px 0 0',
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
+        padding: '0.75rem 1.25rem 2.5rem',
+        maxHeight: '75vh', overflowY: 'auto',
+      }}>
+        <div style={{ width: 40, height: 4, background: '#e5e7eb', borderRadius: 2, margin: '0 auto 1rem' }} />
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2px', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827' }}>{row.label}</span>
+              {crop && (
+                <span style={{ fontSize: '0.65rem', background: color + '20', color, borderRadius: 9999, padding: '1px 8px', fontWeight: 600 }}>
+                  {crop.familyCommon}
+                </span>
+              )}
+            </div>
+            {row.sublabel && (
+              <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{row.sublabel}</div>
+            )}
+          </div>
+          <button onClick={onClose} style={{
+            border: 'none', background: '#f3f4f6', borderRadius: '50%',
+            width: 32, height: 32, cursor: 'pointer', fontSize: '1.1rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#6b7280', flexShrink: 0,
+          }}>×</button>
+        </div>
+
+        {/* Outdoor assignment */}
+        {assignment && (
+          <>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                Status
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {STATUS_FLOW.map(s => {
+                  const active = assignment.status === s;
+                  const col    = PROGRESS_COLORS[s] || '#9ca3af';
+                  return (
+                    <button key={s}
+                      onClick={() => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: assignment.id, status: s } })}
+                      style={{
+                        padding: '0.3rem 0.75rem', borderRadius: 20,
+                        border: `1.5px solid ${active ? col : '#e5e7eb'}`,
+                        background: active ? col + '25' : '#fff',
+                        color: active ? col : '#6b7280',
+                        fontWeight: active ? 700 : 400,
+                        fontSize: '0.78rem', cursor: 'pointer',
+                        transition: 'all 100ms',
+                      }}>
+                      {PROGRESS_LABELS[s] || s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                Bed
+              </div>
+              <select
+                className="form-control"
+                value={assignment.bedId || ''}
+                onChange={e => dispatch({ type: 'UPDATE_ASSIGNMENT', payload: { id: assignment.id, bedId: e.target.value } })}
+                style={{ fontSize: '0.85rem' }}
+              >
+                <option value="">No bed assigned</option>
+                {beds.filter(b => b.active).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {(assignment.sowDate || assignment.expectedHarvestDate) && (
+              <div style={{ fontSize: '0.78rem', color: '#9ca3af', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                {assignment.sowDate && (
+                  <span>🌱 Sow: <strong style={{ color: '#374151' }}>{assignment.sowDate}</strong></span>
+                )}
+                {assignment.expectedHarvestDate && (
+                  <span>🧺 Harvest: <strong style={{ color: '#374151' }}>{assignment.expectedHarvestDate}</strong></span>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Cold-frame entry */}
+        {cfEntry && (
+          <>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                Stage
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {CF_STAGES.map(s => {
+                  const active = cfEntry.stage === s.key;
+                  const col    = '#3b82f6';
+                  return (
+                    <button key={s.key}
+                      onClick={() => dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: cfEntry.id, stage: s.key } })}
+                      style={{
+                        padding: '0.3rem 0.75rem', borderRadius: 20,
+                        border: `1.5px solid ${active ? col : '#e5e7eb'}`,
+                        background: active ? col + '20' : '#fff',
+                        color: active ? col : '#6b7280',
+                        fontWeight: active ? 700 : 400,
+                        fontSize: '0.78rem', cursor: 'pointer',
+                        transition: 'all 100ms',
+                      }}>
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {cfEntry.sowDate && (
+              <div style={{ fontSize: '0.78rem', color: '#9ca3af' }}>
+                🏡 Started indoors: <strong style={{ color: '#374151' }}>{cfEntry.sowDate}</strong>
+              </div>
+            )}
+          </>
+        )}
+
+        {!assignment && !cfEntry && (
+          <p className="text-sm text-muted" style={{ margin: 0 }}>No details available.</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Plan() {
@@ -505,13 +672,26 @@ export default function Plan() {
   const beds                = useBeds();
   const { assignments, coldFrameEntries } = state;
 
+  const planDraft = state.planDraft || { phase: null, selected: [] };
+
   const hasLiveData = useMemo(
     () => assignments.some(a => a.status !== 'harvested') || coldFrameEntries.length > 0,
     [assignments, coldFrameEntries]
   );
 
-  const [phase,    setPhase]    = useState(() => hasLiveData ? 'live' : 'pick');
-  const [selected, setSelected] = useState([]);
+  const [phase, setPhase] = useState(() => {
+    const saved = planDraft.phase;
+    if (!saved) return hasLiveData ? 'live' : 'pick';
+    if (saved === 'review' && (!planDraft.selected || planDraft.selected.length === 0)) return 'pick';
+    return saved;
+  });
+  const [selected, setSelected] = useState(() => planDraft.selected || []);
+  const [selectedRow, setSelectedRow] = useState(null);
+
+  useEffect(() => {
+    dispatch({ type: 'UPDATE_PLAN_DRAFT', payload: { phase, selected } });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, selected]);
 
   const plan = useMemo(
     () => phase === 'review' ? generatePlan(selected, beds) : [],
@@ -652,9 +832,14 @@ export default function Plan() {
       {phase === 'live' && (
         <>
           {liveRows.length > 0 && months.length > 0 ? (
-            <div className="card" style={{ overflow: 'hidden', marginBottom: '1rem' }}>
-              <GanttChart rows={liveRows} months={months} />
-            </div>
+            <>
+              <p className="text-sm text-muted" style={{ marginBottom: '0.5rem' }}>
+                Tap a row to update status or change bed.
+              </p>
+              <div className="card" style={{ overflow: 'hidden', marginBottom: '1rem' }}>
+                <GanttChart rows={liveRows} months={months} onRowClick={setSelectedRow} />
+              </div>
+            </>
           ) : (
             <div className="card" style={{ padding: '2.5rem', textAlign: 'center' }}>
               <p style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🌱</p>
@@ -665,6 +850,17 @@ export default function Plan() {
           )}
           <div style={{ paddingBottom: '5rem' }} />
         </>
+      )}
+
+      {selectedRow && phase === 'live' && (
+        <AssignmentDrawer
+          row={selectedRow}
+          assignments={assignments}
+          coldFrameEntries={coldFrameEntries}
+          beds={beds}
+          dispatch={dispatch}
+          onClose={() => setSelectedRow(null)}
+        />
       )}
     </div>
   );

@@ -15,6 +15,7 @@ const initialState = {
     claudeApiKey: '',
     claudeModel: 'claude-sonnet-4-6',
   },
+  planDraft: { phase: null, selected: [] },
 };
 
 function uid() {
@@ -179,6 +180,11 @@ function reducer(state, action) {
         ...state,
         seedStock: state.seedStock.filter(s => s.id !== action.payload.id),
       };
+    }
+
+    // ── Plan draft ───────────────────────────────────────────────────────────
+    case 'UPDATE_PLAN_DRAFT': {
+      return { ...state, planDraft: { ...state.planDraft, ...action.payload } };
     }
 
     // ── Settings ──────────────────────────────────────────────────────────────
