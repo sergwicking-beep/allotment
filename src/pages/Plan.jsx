@@ -188,6 +188,8 @@ const PROGRESS_LABELS = {
   planned:           'Planned',
   sowing_indoor:     'Sowing indoors',
   germinated_indoor: 'Germinated indoors',
+  growing_indoor:    'Growing indoors',
+  hardening_off:     'Hardening off',
   sown:              'Sown',
   germinated:        'Germinated',
   growing:           'Growing',
@@ -197,13 +199,31 @@ const PROGRESS_LABELS = {
 
 const PROGRESS_COLORS = {
   planned: '#9ca3af', sowing_indoor: '#3b82f6', germinated_indoor: '#84cc16',
+  growing_indoor: '#22c55e', hardening_off: '#f59e0b',
   sown: '#3b82f6', germinated: '#84cc16', growing: '#16a34a',
   harvested: '#15803d', failed: '#ef4444',
+};
+
+// Maps stage IDs (from getActiveStageId) to progress keys (for PROGRESS_LABELS)
+const STAGE_TO_PROGRESS = {
+  sown_indoors:        'sowing_indoor',
+  germinating_indoors: 'germinated_indoor',
+  growing_indoors:     'growing_indoor',
+  hardening:           'hardening_off',
+  transplanted:        'sown',
+  growing_outside:     'growing',
+  planned:             'planned',
+  sown_outside:        'sown',
+  germinating:         'germinated',
+  growing:             'growing',
+  harvested:           'harvested',
+  not_germinated:      'failed',
 };
 
 // Growing-bar fill opacity based on progress
 const BAR_FILL = {
   planned: '18', sowing_indoor: '18', germinated_indoor: '20',
+  growing_indoor: '35', hardening_off: '40',
   sown: '30', germinated: '45', growing: '60', harvested: '80', failed: '20',
 };
 
@@ -248,11 +268,29 @@ function buildReviewRows(plan, assignments, coldFrameEntries) {
                || assignments.find(a => a.cropId === cropId);
     const liveF = coldFrameEntries.find(e => e.cropId === cropId);
     let progress = null;
-    if (liveA?.status === 'harvested')          progress = 'harvested';
-    else if (liveA)                             progress = liveA.status;
-    else if (liveF?.stage === 'failed_to_germinate') progress = 'failed';
-    else if (liveF?.stage === 'germinated')     progress = 'germinated_indoor';
-    else if (liveF)                             progress = 'sowing_indoor';
+    if (liveA?.status === 'harvested') {
+      progress = 'harvested';
+    } else if (liveA) {
+      const isIndoor = Boolean(liveF) ||
+        crop?.propagation === 'cold_frame' ||
+        (crop?.propagation === 'both' && crop?.weeksInColdFrame);
+      if (isIndoor && liveF) {
+        const stageId = getActiveStageId(liveF, liveA, true);
+        progress = STAGE_TO_PROGRESS[stageId] || liveA.status;
+      } else {
+        progress = liveA.status;
+      }
+    } else if (liveF?.stage === 'failed_to_germinate') {
+      progress = 'failed';
+    } else if (liveF?.stage === 'growing_on') {
+      progress = 'growing_indoor';
+    } else if (liveF?.stage === 'ready_to_harden' || liveF?.stage === 'hardening_off') {
+      progress = 'hardening_off';
+    } else if (liveF?.stage === 'germinated') {
+      progress = 'germinated_indoor';
+    } else if (liveF) {
+      progress = 'sowing_indoor';
+    }
 
     return {
       rowId: cropId, cropId, color,
@@ -277,6 +315,10 @@ function buildLiveRows(assignments, coldFrameEntries, beds) {
     const crop  = getCropById(a.cropId);
     const color = crop ? getFamilyColor(crop.family) : '#6b7280';
     const bed   = beds.find(b => b.id === a.bedId);
+    const cfEntry = coldFrameEntries.find(e => e.cropId === a.cropId);
+    const isIndoor = Boolean(cfEntry) ||
+      crop?.propagation === 'cold_frame' ||
+      (crop?.propagation === 'both' && crop?.weeksInColdFrame);
     const markers = [];
     let indoorDate = null, plantDate = null, growStart = null, growEnd = null;
 
@@ -293,11 +335,17 @@ function buildLiveRows(assignments, coldFrameEntries, beds) {
       markers.push({ type: crop?.flower ? 'flowers' : 'harvest', date: a.expectedHarvestDate, label: `Harvest ${crop?.name || ''}` });
     }
 
+    let progress = a.status;
+    if (isIndoor && cfEntry) {
+      const stageId = getActiveStageId(cfEntry, a, true);
+      progress = STAGE_TO_PROGRESS[stageId] || a.status;
+    }
+
     rows.push({
       rowId: a.id, cropId: a.cropId, color,
       label:      crop?.name || a.cropId,
       sublabel:   bed?.name  || null,
-      progress:   a.status,
+      progress,
       indoorDate, plantDate, growStart, growEnd, markers,
     });
   });
@@ -309,13 +357,18 @@ function buildLiveRows(assignments, coldFrameEntries, beds) {
     .forEach(e => {
       const crop  = getCropById(e.cropId);
       const color = crop ? getFamilyColor(crop.family) : '#6b7280';
+      let cfProgress;
+      if (e.stage === 'germinated') cfProgress = 'germinated_indoor';
+      else if (e.stage === 'growing_on') cfProgress = 'growing_indoor';
+      else if (e.stage === 'ready_to_harden' || e.stage === 'hardening_off') cfProgress = 'hardening_off';
+      else cfProgress = 'sowing_indoor';
       rows.push({
         rowId:      `cf-${e.id}`,
         cropId:     e.cropId,
         color,
         label:      crop?.name || e.cropId,
         sublabel:   'Indoors',
-        progress:   e.stage === 'germinated' ? 'germinated_indoor' : 'sowing_indoor',
+        progress:   cfProgress,
         indoorDate: e.sowDate, plantDate: null, growStart: null, growEnd: null,
         markers:    [{ type: 'start_indoors', date: e.sowDate, label: `${crop?.name || ''} started indoors` }],
       });
