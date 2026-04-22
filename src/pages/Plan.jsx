@@ -750,6 +750,21 @@ function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, 
             )}
           </div>
         )}
+
+        {/* Remove from plan */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--gray-100)' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ color: '#b91c1c', width: '100%' }}
+            onClick={() => {
+              if (cfEntry) dispatch({ type: 'DELETE_COLD_FRAME_ENTRY', payload: { id: cfEntry.id } });
+              if (assignment) dispatch({ type: 'DELETE_ASSIGNMENT', payload: { id: assignment.id } });
+              onClose();
+            }}
+          >
+            Remove from plan
+          </button>
+        </div>
       </div>
     </>
   );
