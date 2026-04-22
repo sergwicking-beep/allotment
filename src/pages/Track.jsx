@@ -65,6 +65,9 @@ function buildTasks(beds, assignments, coldFrameEntries) {
           actionType: 'UPDATE_ASSIGNMENT',
           actionPayload: { id: a.id, status: 'germinated' },
           actionLabel: 'Germinated',
+          altActionType: 'UPDATE_ASSIGNMENT',
+          altActionPayload: { id: a.id, status: 'failed' },
+          altActionLabel: "Didn't germinate",
         });
       }
     }
@@ -99,6 +102,9 @@ function buildTasks(beds, assignments, coldFrameEntries) {
           actionType: 'UPDATE_COLD_FRAME_ENTRY',
           actionPayload: { id: e.id, stage: 'germinated' },
           actionLabel: 'Germinated',
+          altActionType: 'UPDATE_COLD_FRAME_ENTRY',
+          altActionPayload: { id: e.id, stage: 'failed_to_germinate' },
+          altActionLabel: "Didn't germinate",
         });
       }
     }
@@ -149,14 +155,27 @@ function TaskItem({ task, dispatch }) {
           </span>
         </div>
       </div>
-      {task.actionLabel && (
-        <button
-          className="btn btn-secondary btn-sm"
-          style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-          onClick={() => dispatch({ type: task.actionType, payload: task.actionPayload })}
-        >
-          {task.actionLabel}
-        </button>
+      {(task.actionLabel || task.altActionLabel) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', flexShrink: 0 }}>
+          {task.actionLabel && (
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => dispatch({ type: task.actionType, payload: task.actionPayload })}
+            >
+              {task.actionLabel}
+            </button>
+          )}
+          {task.altActionLabel && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ whiteSpace: 'nowrap', color: '#b91c1c', fontSize: '0.72rem' }}
+              onClick={() => dispatch({ type: task.altActionType, payload: task.altActionPayload })}
+            >
+              {task.altActionLabel}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
