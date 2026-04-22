@@ -560,6 +560,7 @@ function GanttChart({ rows, months, onRowClick }) {
 
 // Unified lifecycle for crops that go through cold frame first
 const INDOOR_STAGES = [
+  { id: 'planned',             label: 'Planned',                 color: '#9ca3af' },
   { id: 'sown_indoors',        label: 'Sown in cold frame',      color: '#6366f1' },
   { id: 'germinating_indoors', label: 'Germinating (cold frame)', color: '#84cc16' },
   { id: 'growing_indoors',     label: 'Growing on (indoors)',     color: '#22c55e' },
@@ -588,6 +589,7 @@ function getActiveStageId(cfEntry, assignment, isIndoor) {
   if (isIndoor) {
     if (aStatus === 'growing')  return 'growing_outside';
     if (aStatus === 'sown')     return 'transplanted';
+    if (!cfEntry)               return 'planned';
     if (cfStage === 'hardening_off' || cfStage === 'ready_to_harden') return 'hardening';
     if (cfStage === 'growing_on')  return 'growing_indoors';
     if (cfStage === 'germinated')  return 'germinating_indoors';
@@ -602,16 +604,23 @@ function getActiveStageId(cfEntry, assignment, isIndoor) {
 function applyStage(stageId, cfEntry, assignment, dispatch) {
   const cfId = cfEntry?.id;
   const aId  = assignment?.id;
-  const upCf = (stage)  => cfId && dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: cfId, stage } });
-  const upA  = (status) => aId  && dispatch({ type: 'UPDATE_ASSIGNMENT',       payload: { id: aId,  status } });
+  const upCf  = (stage)  => cfId && dispatch({ type: 'UPDATE_COLD_FRAME_ENTRY', payload: { id: cfId, stage } });
+  const upA   = (status) => aId  && dispatch({ type: 'UPDATE_ASSIGNMENT',       payload: { id: aId,  status } });
+  const delCf = ()       => cfId && dispatch({ type: 'DELETE_COLD_FRAME_ENTRY', payload: { id: cfId } });
+  const addCf = ()       => !cfId && assignment && dispatch({ type: 'ADD_COLD_FRAME_ENTRY', payload: {
+    cropId:  assignment.cropId,
+    sowDate: new Date().toISOString().split('T')[0],
+    stage:   'just_sown',
+    notes:   '',
+  }});
   switch (stageId) {
-    case 'sown_indoors':        upCf('just_sown');          upA('planned');    break;
+    case 'planned':             delCf();                     upA('planned');    break;
+    case 'sown_indoors':        addCf(); upCf('just_sown');  upA('planned');    break;
     case 'germinating_indoors': upCf('germinated');          upA('planned');    break;
     case 'growing_indoors':     upCf('growing_on');          upA('planned');    break;
     case 'hardening':           upCf('hardening_off');       upA('planned');    break;
     case 'transplanted':        upCf('hardening_off');       upA('sown');       break;
     case 'growing_outside':                                   upA('growing');    break;
-    case 'planned':                                           upA('planned');    break;
     case 'sown_outside':                                      upA('sown');       break;
     case 'germinating':                                       upA('germinated'); break;
     case 'growing':                                           upA('growing');    break;
@@ -641,7 +650,7 @@ function AssignmentDrawer({ row, assignments, coldFrameEntries, beds, dispatch, 
 
   // For CF-only rows, hide outdoor stages that have no assignment to back them
   const visibleStages = isCfRow && !assignment
-    ? stages.filter(s => !['transplanted', 'growing_outside', 'growing', 'harvested'].includes(s.id))
+    ? stages.filter(s => !['planned', 'transplanted', 'growing_outside', 'growing', 'harvested'].includes(s.id))
     : stages;
 
   return (
@@ -910,19 +919,17 @@ export default function Plan() {
   function handleAccept() {
     if (noBeds) return;
     plan.forEach(item => {
-      if (item.type === 'start_indoors') {
-        dispatch({ type: 'ADD_COLD_FRAME_ENTRY', payload: {
-          cropId: item.cropId, sowDate: item.date, stage: 'just_sown', notes: '',
-        }});
-      }
       if (item.type === 'plant_out' || item.type === 'sow_direct') {
-        const harvestItem = plan.find(p => p.cropId === item.cropId &&
+        const harvestItem  = plan.find(p => p.cropId === item.cropId &&
           (p.type === 'harvest' || p.type === 'flowers'));
+        const indoorItem   = item.type === 'plant_out'
+          ? plan.find(p => p.cropId === item.cropId && p.type === 'start_indoors')
+          : null;
         dispatch({ type: 'ADD_ASSIGNMENT', payload: {
           bedId:               item.bed?.id || '',
           cropId:              item.cropId,
           variety:             '',
-          sowDate:             item.date,
+          sowDate:             indoorItem?.date ?? item.date,
           transplantDate:      item.type === 'plant_out' ? item.date : null,
           expectedHarvestDate: harvestItem?.date || null,
           status:              'planned',
