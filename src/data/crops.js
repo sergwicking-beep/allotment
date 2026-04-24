@@ -11,6 +11,7 @@ export const FAMILY_COLORS = {
   Iridaceae: '#7c3aed',
   Liliaceae: '#db2777',
   Poaceae: '#65a30d',
+  Polygonaceae: '#be123c',
 };
 
 export const FAMILY_BG_COLORS = {
@@ -26,6 +27,7 @@ export const FAMILY_BG_COLORS = {
   Iridaceae: '#f5f3ff',
   Liliaceae: '#fdf2f8',
   Poaceae: '#f7fee7',
+  Polygonaceae: '#fce7f3',
 };
 
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -778,6 +780,27 @@ export const CROPS = [
     flower: true,
     description: 'Elegant nodding bell-shaped flowers on tall stems. Snake\'s head fritillary (F. meleagris) thrives in damp meadow conditions; crown imperials prefer drier, sunnier spots.',
     propagationNotes: 'Plant bulbs in autumn as soon as available — they dry out quickly so don\'t delay. Plant on their sides to prevent water sitting in the hollow top and rotting the bulb. Snake\'s head fritillary: 10 cm deep, 15 cm apart in moist but not waterlogged soil. Leave undisturbed to naturalise.',
+    coldFrameNotes: null,
+  },
+
+  {
+    id: 'rhubarb',
+    name: 'Rhubarb',
+    family: 'Polygonaceae',
+    familyCommon: 'Dock family',
+    sowWindowStart: null, sowWindowEnd: null,
+    alternateSowStart: null, alternateSowEnd: null,
+    harvestWindowStart: 4, harvestWindowEnd: 7,
+    daysToGermination: null,
+    spacingCm: 90, depthCm: null,
+    propagation: 'direct',
+    degreesDaysToHarvest: null,
+    minSoilTempC: null,
+    perennial: true, bush: false,
+    weeksInColdFrame: null,
+    rotationGroup: 'Perennial',
+    description: 'Hardy perennial grown for its tart, edible stalks. Very low maintenance once established. Avoid harvesting in the first year to let the plant establish; harvest lightly in year two.',
+    propagationNotes: 'Plant crowns in autumn or early spring with the growing bud just at or slightly below soil level, spaced 90 cm apart. Top-dress with compost each autumn. Do not harvest in year one. Twist and pull stalks rather than cutting. Stop harvesting by July to allow the plant to rebuild energy. Divide crowns every 5–10 years to maintain vigour.',
     coldFrameNotes: null,
   },
 ];
