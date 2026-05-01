@@ -796,6 +796,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   text-align: left;
   width: 100%;
 }
+.plot-bed.has-crops { justify-content: flex-start; }
 .plot-bed:hover { filter: brightness(1.08); transform: scale(1.02); z-index: 3; }
 .plot-bed.inactive { border-style: dashed; }
 .plot-bed.is-dragging {
@@ -803,6 +804,41 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   z-index: 10;
   opacity: 0.9 !important;
   transform: none !important;
+}
+.plot-bed-crops {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  margin-top: 3px;
+  gap: 1px;
+  overflow: hidden;
+}
+.plot-crop-strip {
+  display: flex;
+  align-items: center;
+  padding: 1px 3px;
+  border-radius: 2px;
+  min-height: 12px;
+  background: rgba(0,0,0,.10);
+  border-left: 3px solid transparent;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.plot-crop-name {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(0,0,0,.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.plot-crop-rows {
+  font-size: 0.55rem;
+  font-weight: 400;
+  color: rgba(0,0,0,.55);
 }
 .plot-resize-handle {
   position: absolute;

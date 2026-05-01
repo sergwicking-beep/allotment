@@ -176,6 +176,7 @@ function AssignmentModal({ assignment, bedId, beds, history, onSave, onHarvest, 
     expectedHarvestDate: '',
     status: 'sown',
     successionIntervalWeeks: '',
+    rowsSown: '',
     season: CURRENT_YEAR,
   } : {
     bedId: assignment.bedId,
@@ -186,6 +187,7 @@ function AssignmentModal({ assignment, bedId, beds, history, onSave, onHarvest, 
     expectedHarvestDate: assignment.expectedHarvestDate || '',
     status: assignment.status,
     successionIntervalWeeks: assignment.successionIntervalWeeks || '',
+    rowsSown: assignment.rowsSown || '',
     season: assignment.season || CURRENT_YEAR,
   });
 
@@ -307,6 +309,17 @@ function AssignmentModal({ assignment, bedId, beds, history, onSave, onHarvest, 
                 <label className="form-label">Expected harvest / flower</label>
                 <input className="form-control" type="date" value={form.expectedHarvestDate}
                   onChange={e => set('expectedHarvestDate', e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-row form-row-2">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Rows / drills sown (optional)</label>
+                <input className="form-control" type="number" min="1" max="200" step="1"
+                  value={form.rowsSown}
+                  onChange={e => set('rowsSown', e.target.value)}
+                  placeholder="e.g. 3" />
+                <span className="form-hint">How many rows did you sow? Shows coverage on the plot map.</span>
               </div>
             </div>
           </div>
@@ -467,7 +480,7 @@ function BedDetailModal({ bed, assignments, onAddCrop, onEditBed, onEditAssignme
 }
 
 // ── DraggableGrid ─────────────────────────────────────────────────────────────
-function DraggableGrid({ beds, onUpdate, onBedClick }) {
+function DraggableGrid({ beds, assignments, onUpdate, onBedClick }) {
   const gridRef    = useRef(null);
   const dragRef    = useRef(null);
   const previewRef = useRef(null);
@@ -613,11 +626,12 @@ function DraggableGrid({ beds, onUpdate, onBedClick }) {
           const row  = clamp(bed.gridY       ?? 1, 1, GRID_ROWS);
           const span = clamp(bed.widthCells  ?? 2, 1, GRID_COLS - col + 1);
           const rows = clamp(bed.lengthCells ?? 4, 1, GRID_ROWS - row + 1);
+          const bedCrops = assignments ? assignments.filter(a => a.bedId === bed.id) : [];
 
           return (
             <div
               key={bed.id}
-              className={`plot-bed${bed.active ? '' : ' inactive'}${isActive ? ' is-dragging' : ''}`}
+              className={`plot-bed${bed.active ? '' : ' inactive'}${isActive ? ' is-dragging' : ''}${bedCrops.length > 0 ? ' has-crops' : ''}`}
               style={{
                 gridColumn: `${col} / span ${span}`,
                 gridRow:    `${row} / span ${rows}`,
@@ -638,6 +652,29 @@ function DraggableGrid({ beds, onUpdate, onBedClick }) {
             >
               <span className="plot-bed-name">{bed.name}</span>
               <span className="plot-bed-dims">{bed.widthM}×{bed.lengthM}m</span>
+
+              {bedCrops.length > 0 && (
+                <div className="plot-bed-crops">
+                  {bedCrops.map(a => {
+                    const crop = getCropById(a.cropId);
+                    const color = getFamilyColor(crop?.family) || '#555';
+                    const rowCount = a.rowsSown ? parseFloat(a.rowsSown) : null;
+                    return (
+                      <div
+                        key={a.id}
+                        className="plot-crop-strip"
+                        style={{ flex: rowCount || 1, borderLeftColor: color }}
+                        title={`${crop?.name || a.cropId}${rowCount ? ` · ${rowCount} rows` : ''}`}
+                      >
+                        <span className="plot-crop-name">
+                          {crop?.name || a.cropId}
+                          {rowCount ? <span className="plot-crop-rows"> · {rowCount}r</span> : null}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div
                 className="plot-resize-handle"
@@ -802,6 +839,7 @@ export default function PlotLayout() {
             ) : (
               <DraggableGrid
                 beds={beds}
+                assignments={assignments}
                 onUpdate={handleGridUpdate}
                 onBedClick={b => setModal({ type: 'bed-detail', bed: b })}
               />
